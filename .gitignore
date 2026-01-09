@@ -1,0 +1,8 @@
+*.zip
+.env
+target/
+dbt_packages/
+logs/
+env/
+.user.yml
+dbt_internal_packages/

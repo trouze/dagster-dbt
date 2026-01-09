@@ -1,0 +1,10 @@
+version: 2
+
+models:
+  - name: fct_orders
+    description: ""
+  - name: dim_customers
+    description: ""
+    config:
+      group: customers_group
+      access: public

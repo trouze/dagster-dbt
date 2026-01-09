@@ -1,0 +1,38 @@
+version: 2
+
+models:
+  - name: orders_by_customer
+    description: ""
+    group: mart
+    access: public
+    columns:
+      - name: customer_id
+        data_tests:
+          - not_null
+      - name: first_name
+      - name: last_initial
+      - name: max_order_date
+      - name: min_order_date
+
+exposures:
+  - name: jaffle_order_metrics
+    type: dashboard
+    maturity: high
+    url: https://bi.tool/dashboards/1
+    description: >
+      Did someone say "exponential growth"?
+    
+    depends_on:
+      - ref('orders_by_customer')
+      
+    owner:
+      name: Tyler from A8
+      email: data@jaffleshop.com
+
+groups:
+  - name: mart
+    owner:
+      # 'name' or 'email' is required; additional properties allowed
+      email: mart@jaffleshop.com
+      slack: mart-data
+      github: mart-data-team

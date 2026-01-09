@@ -1,0 +1,37 @@
+version: 2
+
+sources:
+  - name: jaffle_shop
+    database: RAW
+    schema: trouze
+    tables:
+      - name: raw_customers
+        freshness:
+          warn_after: {count: 24, period: hour}
+          error_after: {count: 48, period: hour}
+        loaded_at_field: "cast(LOAD_DTS as TIMESTAMP)"
+      - name: raw_orders
+        freshness:
+          warn_after: {count: 24, period: hour}
+          error_after: {count: 48, period: hour}
+        loaded_at_field: "cast(LOAD_DTS as TIMESTAMP)"
+      - name: raw_products
+        freshness:
+          warn_after: {count: 24, period: hour}
+          error_after: {count: 48, period: hour}
+        loaded_at_field: "cast(LOAD_DTS as TIMESTAMP)"
+      - name: raw_stores
+        freshness:
+          warn_after: {count: 24, period: hour}
+          error_after: {count: 48, period: hour}
+        loaded_at_field: "cast(LOAD_DTS as TIMESTAMP)"
+      - name: raw_supplies
+        freshness:
+          warn_after: {count: 24, period: hour}
+          error_after: {count: 48, period: hour}
+        loaded_at_field: "cast(LOAD_DTS as TIMESTAMP)"
+      - name: raw_items
+        freshness:
+          warn_after: {count: 24, period: hour}
+          error_after: {count: 48, period: hour}
+        loaded_at_field: "cast(LOAD_DTS as TIMESTAMP)"        

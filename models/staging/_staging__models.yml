@@ -1,0 +1,41 @@
+version: 2
+
+models:
+  - name: stg_customers
+    group: customers_group
+    access: public
+    description: "test"
+    columns:
+      - name: customer_id
+        data_type: text
+        description: "test"
+        data_tests:
+          - not_null
+          - unique
+      - name: last_model_run
+        data_type: timestamp_ltz
+      - name: load_dts
+        data_type: date
+      - name: name
+        data_type: text
+      - name: signup_date
+        data_type: text
+  - name: stg_orders
+    description: ""
+  - name: stg_items
+    description: ""
+  - name: stg_products
+    description: ""
+  - name: stg_stores
+    description: ""
+  - name: stg_supplies
+    description: ""
+
+
+groups:
+  - name: customers_group
+    owner:
+      # 'name' or 'email' is required; additional properties allowed
+      email: finance@jaffleshop.com
+      slack: finance-data
+      github: finance-data-team
