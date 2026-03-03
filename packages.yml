@@ -1,3 +1,5 @@
 packages:
   - package: dbt-labs/codegen
     version: 0.7.0
+  - package: AxelThevenot/dbt_assertions
+    version: [">=1.0.0", "<3.0.0"]

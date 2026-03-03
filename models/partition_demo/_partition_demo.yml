@@ -1,0 +1,50 @@
+version: 2
+
+sources:
+  - name: partition_demo
+    database: RAW
+    schema: trouze
+    tables:
+      - name: inbound_file_orders_{{ var("partition_id") }}
+
+models:
+  - name: file_orders_stage
+    description: >
+      Incrementally staged orders filtered by partition (file_id).
+      Each dbt invocation processes a single file by passing
+      --vars '{"partition_id": "file_xxx"}'.
+      Assertions are evaluated inline and stored in the exceptions column.
+    columns:
+      - name: order_id
+        data_tests:
+          - not_null
+      - name: exceptions
+        config:
+          meta:
+            assertions:
+              __not_null__:
+                - order_id
+                - customer_id
+                - store_id
+              order_total_positive:
+                description: "Order total must be greater than zero."
+                expression: "order_total > 0"
+              totals_reconcile:
+                description: "Order total must equal subtotal + tax."
+                expression: "order_total = subtotal + tax_paid"
+
+  - name: file_orders_rejects
+    description: >
+      Rejected rows that failed one or more assertions in the stage layer.
+      Retains the exceptions column for audit and investigation.
+
+  - name: file_orders_refined
+    description: >
+      Clean rows that passed all assertions. This is the table downstream
+      consumers should reference — it is partition-unaware and always
+      contains the full set of validated records.
+    columns:
+      - name: order_id
+        data_tests:
+          - unique
+          - not_null

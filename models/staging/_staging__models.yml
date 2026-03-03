@@ -2,8 +2,6 @@ version: 2
 
 models:
   - name: stg_customers
-    group: customers_group
-    access: public
     description: "test"
     columns:
       - name: customer_id
@@ -20,6 +18,9 @@ models:
         data_type: text
       - name: signup_date
         data_type: text
+    config:
+      group: customers_group
+      access: public
   - name: stg_orders
     description: ""
   - name: stg_items
@@ -37,5 +38,7 @@ groups:
     owner:
       # 'name' or 'email' is required; additional properties allowed
       email: finance@jaffleshop.com
-      slack: finance-data
-      github: finance-data-team
+    config:
+      meta:
+        slack: finance-data
+        github: finance-data-team
