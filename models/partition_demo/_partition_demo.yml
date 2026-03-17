@@ -48,3 +48,38 @@ models:
         data_tests:
           - unique
           - not_null
+
+  - name: hygiene_results
+    description: >
+      Append-only log of external hygiene API results. First dbt build
+      creates the table; Dagster INSERTs raw API responses with an
+      inserted_at timestamp. Multiple rows per customer_id are expected —
+      name_address deduplicates to the latest result per customer.
+    columns:
+      - name: customer_id
+        data_tests:
+          - not_null
+      - name: inserted_at
+        description: >
+          Timestamp of when Dagster inserted this hygiene result batch.
+          Used by name_address to incrementally pick up only new results.
+
+  - name: name_address
+    description: >
+      Terminal address table built by merging hygiene_results with refined
+      order data. Dagster triggers this model after writing to
+      hygiene_results. Uses inserted_at from hygiene_results for
+      incremental filtering — only new results since the last run are
+      processed. Deduplicates to the latest hygiene result per customer.
+    columns:
+      - name: customer_id
+        data_tests:
+          - unique
+          - not_null
+      - name: last_hygiene_date
+        data_tests:
+          - not_null
+      - name: inserted_at
+        description: >
+          Carried through from hygiene_results. Tracks when the latest
+          hygiene result was loaded; used as the incremental high-water mark.

@@ -1,0 +1,50 @@
+version: 2
+
+functions:
+  - name: needs_hygiene
+    description: >
+      Shared staleness predicate: returns TRUE if a record should be routed
+      to hygiene — either never hygiene'd (NULL date) or stale beyond the
+      staleness_months threshold. Reusable across all hygiene overlays and
+      callable from any warehouse client (Dagster, BI tools, notebooks).
+    config:
+      schema: partition_demo
+    arguments:
+      - name: last_hygiene_date
+        data_type: date
+        description: The date the record was last sent through hygiene.
+      - name: staleness_months
+        data_type: integer
+        default_value: "18"
+        description: >
+          Number of months after which a previously hygiene'd record is
+          considered stale and should be re-sent.
+    returns:
+      data_type: boolean
+
+  - name: address_hygiene_pending
+    description: >
+      Returns records from a given file partition that should be sent to
+      address hygiene. Captures both new addresses (never seen in
+      name_address, typically ~5-10% of records per file) and stale
+      addresses (last hygiene'd beyond the staleness threshold). During
+      normal file processing the staleness window won't match, so only
+      new records are returned; for periodic refreshes, lower the
+      threshold to pick up stale records too.
+    config:
+      schema: partition_demo
+    arguments:
+      - name: p_file_id
+        data_type: varchar
+        default_value: "NULL"
+        description: >
+          File/partition identifier to scope the pending set. NULL returns
+          pending records across all files (useful for periodic refresh).
+      - name: p_staleness_months
+        data_type: integer
+        default_value: "18"
+        description: >
+          Number of months after which a previously hygiene'd record is
+          considered stale. Passed through to the needs_hygiene predicate.
+    returns:
+      data_type: "table(customer_id varchar, order_id number, store_id varchar, file_id varchar)"
