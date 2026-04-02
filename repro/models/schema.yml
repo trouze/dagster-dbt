@@ -1,0 +1,21 @@
+version: 2
+
+sources:
+  - name: repro
+    database: RAW
+    schema: trouze
+    tables:
+      - name: inbound_file_orders_001
+
+models:
+  - name: stage_model
+    description: Minimal model that uses dbt_assertions with config.meta.assertions (Fusion path).
+    columns:
+      - name: id
+      - name: exceptions
+        config:
+          meta:
+            assertions:
+              __not_null__:
+                - id
+                - name

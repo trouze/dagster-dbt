@@ -1,0 +1,16 @@
+[project]
+name = "dagster-partition-demo"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+    "dagster",
+    "dagster-webserver",
+    "httpx",
+    "snowflake-connector-python",
+]
+
+[project.optional-dependencies]
+dev = ["dagster-webserver"]
+
+[tool.dagster]
+module_name = "dagster_partition_demo.definitions"
