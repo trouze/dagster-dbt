@@ -39,6 +39,10 @@ class DbtCloudJobPool(dg.ConfigurableResource):
     account_id: str = Field(description="dbt Cloud account id.")
     api_token: str = Field(description="dbt Cloud API token.")
     project_id: int = Field(default=406315)
+    environment_id: int | None = Field(
+        default=None,
+        description="Optional dbt Cloud environment id to scope pool jobs.",
+    )
     job_prefix: str = Field(default="partition_runner")
     poll_interval_seconds: int = Field(default=15)
     acquire_timeout_seconds: int = Field(default=300)
@@ -60,6 +64,7 @@ class DbtCloudJobPool(dg.ConfigurableResource):
     _lock: threading.Lock = PrivateAttr(default_factory=threading.Lock)
     _lease_table_initialized: bool = PrivateAttr(default=False)
     _function_relation_cache: dict[str, str] = PrivateAttr(default_factory=dict)
+    _model_relation_cache: dict[str, str] = PrivateAttr(default_factory=dict)
     _lease_owner: str = PrivateAttr(
         default_factory=lambda: f"{socket.gethostname()}:{os.getpid()}:{threading.get_ident()}"
     )
@@ -290,7 +295,14 @@ class DbtCloudJobPool(dg.ConfigurableResource):
             },
         )
         jobs = response.get("data", [])
-        return [job for job in jobs if str(job.get("name", "")).startswith(self.job_prefix)]
+        scoped_jobs = [job for job in jobs if str(job.get("name", "")).startswith(self.job_prefix)]
+        if self.environment_id is not None:
+            scoped_jobs = [
+                job
+                for job in scoped_jobs
+                if int(job.get("environment_id", -1)) == int(self.environment_id)
+            ]
+        return scoped_jobs
 
     def _list_runs_for_job(self, job_id: int, statuses: list[int], limit: int = 20) -> list[dict[str, Any]]:
         response = self._request(
@@ -357,8 +369,11 @@ class DbtCloudJobPool(dg.ConfigurableResource):
             f"/api/v2/accounts/{self.account_id}/runs/{run_id}/artifacts/manifest.json",
         )
         nodes = manifest.get("nodes", {})
+        function_nodes = manifest.get("functions", {})
         fn_lower = function_name.lower()
-        for node in nodes.values():
+        # dbt manifests can expose functions in top-level `functions`
+        # (newer versions) and/or in `nodes` (older shapes).
+        for node in list(nodes.values()) + list(function_nodes.values()):
             if node.get("resource_type") != "function":
                 continue
             if str(node.get("name", "")).lower() != fn_lower:
@@ -406,6 +421,56 @@ class DbtCloudJobPool(dg.ConfigurableResource):
             )
         )
 
+    def get_model_relation_from_run(self, run_id: int, model_name: str) -> str | None:
+        manifest = self._request(
+            "GET",
+            f"/api/v2/accounts/{self.account_id}/runs/{run_id}/artifacts/manifest.json",
+        )
+        nodes = manifest.get("nodes", {})
+        model_lower = model_name.lower()
+        for node in nodes.values():
+            if node.get("resource_type") != "model":
+                continue
+            if str(node.get("name", "")).lower() != model_lower:
+                continue
+            relation_name = node.get("relation_name")
+            if relation_name:
+                return str(relation_name)
+            database = node.get("database")
+            schema = node.get("schema")
+            alias = node.get("alias") or model_name
+            if database and schema:
+                return f"{database}.{schema}.{alias}"
+        return None
+
+    def resolve_model_relation_from_cloud(self, model_name: str, partition_id: str) -> str:
+        cache_key = f"{model_name}:{partition_id}"
+        if cache_key in self._model_relation_cache:
+            return self._model_relation_cache[cache_key]
+
+        candidate_run_ids = self.get_successful_run_ids_for_partition(partition_id)
+        if not candidate_run_ids:
+            candidate_run_ids = self.get_successful_run_ids_from_pool()
+        if not candidate_run_ids:
+            raise dg.Failure(
+                description=(
+                    f"Unable to resolve dbt model relation for {model_name}: "
+                    "no successful dbt Cloud runs found in pool jobs."
+                )
+            )
+
+        for run_id in candidate_run_ids:
+            relation = self.get_model_relation_from_run(run_id=run_id, model_name=model_name)
+            if relation:
+                self._model_relation_cache[cache_key] = relation
+                return relation
+
+        raise dg.Failure(
+            description=(
+                f"Model '{model_name}' not found in manifest artifacts for recent successful runs."
+            )
+        )
+
     def _job_has_active_run(self, job_id: int) -> bool:
         response = self._request(
             "GET",
@@ -425,6 +490,16 @@ class DbtCloudJobPool(dg.ConfigurableResource):
 
     def discover_pool(self) -> dict[int, str]:
         jobs = self._list_pool_jobs()
+        if not jobs:
+            env_hint = (
+                f"environment_id={self.environment_id}, " if self.environment_id is not None else ""
+            )
+            raise dg.Failure(
+                description=(
+                    "No dbt Cloud pool jobs found. "
+                    f"Check job_prefix={self.job_prefix}, {env_hint}project_id={self.project_id}."
+                )
+            )
         pool: dict[int, str] = {}
 
         for job in jobs:

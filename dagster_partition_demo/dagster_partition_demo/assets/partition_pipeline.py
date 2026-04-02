@@ -18,6 +18,18 @@ class SnowflakeResource(dg.ConfigurableResource):
     warehouse: str = Field(description="Snowflake warehouse name.")
     database: str = Field(description="Snowflake database name.")
     schema_name: str = Field(default="TROUZE", description="Snowflake schema name.")
+    hygiene_results_database: str | None = Field(
+        default=None,
+        description="Optional database override for hygiene_results writes.",
+    )
+    hygiene_results_schema: str | None = Field(
+        default=None,
+        description="Optional schema override for hygiene_results writes.",
+    )
+    hygiene_results_table: str = Field(
+        default="hygiene_results",
+        description="Target table name for hygiene result inserts.",
+    )
     password: str | None = Field(default=None, description="Optional Snowflake password.")
     private_key_path: str | None = Field(
         default=None, description="Optional path to Snowflake RSA private key."
@@ -62,12 +74,11 @@ class SnowflakeResource(dg.ConfigurableResource):
                 columns = [col[0].lower() for col in cursor.description]
                 return [dict(zip(columns, row)) for row in cursor.fetchall()]
 
-    def insert_hygiene_results(self, rows: list[dict[str, Any]]) -> None:
+    def insert_hygiene_results(self, rows: list[dict[str, Any]], target_relation: str | None = None) -> None:
         if not rows:
             return
 
         values = []
-        now = datetime.now(timezone.utc).isoformat()
         for row in rows:
             values.append(
                 (
@@ -76,12 +87,18 @@ class SnowflakeResource(dg.ConfigurableResource):
                     row["corrected_name"],
                     row["corrected_address"],
                     row["last_hygiene_date"],
-                    now,
                 )
             )
 
-        insert_sql = """
-            insert into hygiene_results
+        resolved_target_relation = target_relation
+        if not resolved_target_relation:
+            target_database = self.hygiene_results_database or self.database
+            target_schema = self.hygiene_results_schema or self.schema_name
+            target_table = self.hygiene_results_table
+            resolved_target_relation = f'"{target_database}"."{target_schema}"."{target_table}"'
+
+        insert_sql = f"""
+            insert into {resolved_target_relation}
             (
                 customer_id,
                 hygiene_status,
@@ -90,7 +107,7 @@ class SnowflakeResource(dg.ConfigurableResource):
                 last_hygiene_date,
                 inserted_at
             )
-            values (%s, %s, %s, %s, %s, %s)
+            values (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP())
         """
         with self._connect() as conn:
             with conn.cursor() as cursor:
@@ -180,6 +197,10 @@ def partition_hygiene_processing(
         function_name="address_hygiene_pending",
         partition_id=partition_id,
     )
+    hygiene_results_relation = dbt_cloud_pool.resolve_model_relation_from_cloud(
+        model_name="hygiene_results",
+        partition_id=partition_id,
+    )
     pending = snowflake.execute(
         f"select * from table({hygiene_function_relation}(%s, %s))",
         params=(partition_id, 18),
@@ -190,11 +211,12 @@ def partition_hygiene_processing(
 
     deduped_pending = dedupe_pending_rows(pending)
     hygiene_results = call_hygiene_api_with_retry(deduped_pending)
-    snowflake.insert_hygiene_results(hygiene_results)
+    snowflake.insert_hygiene_results(hygiene_results, target_relation=hygiene_results_relation)
     context.log.info(
-        "Inserted %s hygiene records for partition %s (pending=%s, deduped=%s).",
+        "Inserted %s hygiene records for partition %s into %s (pending=%s, deduped=%s).",
         len(hygiene_results),
         partition_id,
+        hygiene_results_relation,
         len(pending),
         len(deduped_pending),
     )
@@ -205,6 +227,7 @@ def partition_hygiene_processing(
             "records_processed": len(hygiene_results),
             "pending_records": len(pending),
             "deduped_records": len(deduped_pending),
+            "hygiene_results_relation": hygiene_results_relation,
         }
     )
 
