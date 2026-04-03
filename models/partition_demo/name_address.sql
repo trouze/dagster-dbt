@@ -10,8 +10,7 @@
 with refined_addresses as (
 
     select distinct
-        customer_id,
-        store_id
+        customer_id
     from {{ ref('file_orders_refined') }}
 
 ),
@@ -43,7 +42,6 @@ final as (
 
     select
         r.customer_id,
-        r.store_id,
         h.hygiene_status,
         h.corrected_name,
         h.corrected_address,

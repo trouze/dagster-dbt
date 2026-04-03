@@ -1,7 +1,9 @@
 import json
+import random
 import re
 import threading
 import time
+from hashlib import sha256
 from typing import Any
 
 import dagster as dg
@@ -295,27 +297,37 @@ class DbtCloudJobPool(dg.ConfigurableResource):
 
         return dict(pool)
 
-    def acquire_job(self) -> int:
+    def acquire_job(self, selection_hint: str | None = None) -> int:
         with self._lock:
-            for job_id, state in self._pool.items():
-                if state == "idle":
-                    self._pool[job_id] = "busy"
-                    return job_id
+            idle_job_ids = [job_id for job_id, state in sorted(self._pool.items()) if state == "idle"]
+            if idle_job_ids:
+                job_count = len(idle_job_ids)
+                if selection_hint:
+                    digest = sha256(selection_hint.encode("utf-8")).digest()
+                    base_idx = int.from_bytes(digest[:8], "big") % job_count
+                else:
+                    base_idx = 0
+                jitter = random.randrange(job_count)
+                # Hybrid strategy: stable hint-based spread plus random jitter to avoid herding.
+                selected_job_id = idle_job_ids[(base_idx + jitter) % job_count]
+                self._pool[selected_job_id] = "busy"
+                return selected_job_id
         raise RuntimeError("No idle dbt Cloud pool jobs available.")
 
-    def wait_and_acquire(self, timeout_seconds: int | None = None) -> int:
+    def wait_and_acquire(
+        self, timeout_seconds: int | None = None, selection_hint: str | None = None
+    ) -> int:
         timeout = timeout_seconds if timeout_seconds is not None else self.acquire_timeout_seconds
         start = time.time()
         sleep_seconds = 2
 
         while time.time() - start < timeout:
-            if not self._pool:
-                self.discover_pool()
+            # Always refresh from API because workers run in separate processes.
+            self.discover_pool()
 
             try:
-                return self.acquire_job()
+                return self.acquire_job(selection_hint=selection_hint)
             except RuntimeError:
-                self.discover_pool()
                 time.sleep(sleep_seconds)
                 sleep_seconds = min(sleep_seconds * 2, 15)
 
@@ -382,7 +394,10 @@ class DbtCloudJobPool(dg.ConfigurableResource):
                     )
                 )
 
-            job_id = self.wait_and_acquire(timeout_seconds=max(1, int(remaining)))
+            job_id = self.wait_and_acquire(
+                timeout_seconds=max(1, int(remaining)),
+                selection_hint=partition_id,
+            )
             try:
                 run_id = self.trigger_run(job_id=job_id, partition_id=partition_id)
                 result = self.poll_run(run_id=run_id, context=context)
