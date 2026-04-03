@@ -1,0 +1,37 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/dbt-labs/dbt-jobs-as-code/main/src/schemas/load_job_schema.json
+
+_pool_job_defaults: &pool_defaults
+  account_id: 51798
+  project_id: 489484
+  environment_id: 416180
+  execute_steps:
+    - "dbt run --select +address_hygiene_pending --vars '{\"partition_id\": \"default\"}'"
+  generate_docs: false
+  run_generate_sources: false
+  settings:
+    threads: 4
+    target_name: default
+  schedule:
+    cron: "0 0 1 1 *"
+  triggers:
+    schedule: false
+    github_webhook: false
+    git_provider_webhook: false
+    on_merge: false
+
+jobs:
+  partition_runner_01:
+    <<: *pool_defaults
+    name: "partition_runner_01 [[pool]]"
+  partition_runner_02:
+    <<: *pool_defaults
+    name: "partition_runner_02 [[pool]]"
+  partition_runner_03:
+    <<: *pool_defaults
+    name: "partition_runner_03 [[pool]]"
+  partition_runner_04:
+    <<: *pool_defaults
+    name: "partition_runner_04 [[pool]]"
+  partition_runner_05:
+    <<: *pool_defaults
+    name: "partition_runner_05 [[pool]]"
