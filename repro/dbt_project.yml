@@ -1,7 +1,0 @@
-name: repro_assertions_fusion
-version: 1.0.0
-config-version: 2
-
-profile: sa_snowflake
-
-model-paths: ["models"]

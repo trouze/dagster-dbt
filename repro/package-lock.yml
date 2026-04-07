@@ -1,5 +1,0 @@
-packages:
-- package: AxelThevenot/dbt_assertions
-  name: dbt_assertions
-  version: 1.8.3
-sha1_hash: 5434971c207c1e869736ad00a7ed3c5c3aa6287a
