@@ -13,7 +13,6 @@ models:
       - name: min_order_date
 
     config:
-      group: mart
       access: public
 exposures:
   - name: jaffle_order_metrics

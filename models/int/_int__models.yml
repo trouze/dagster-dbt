@@ -6,5 +6,4 @@ models:
   - name: dim_customers
     description: ""
     config:
-      group: customers_group
       access: public

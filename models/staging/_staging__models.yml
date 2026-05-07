@@ -19,7 +19,6 @@ models:
       - name: signup_date
         data_type: text
     config:
-      group: customers_group
       access: public
   - name: stg_orders
     description: ""
@@ -31,7 +30,6 @@ models:
     description: ""
   - name: stg_supplies
     description: ""
-
 
 groups:
   - name: customers_group
