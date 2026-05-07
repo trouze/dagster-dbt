@@ -9,6 +9,9 @@ sources:
 
 models:
   - name: file_orders_stage
+    config:
+      tags:
+        - chain1
     description: >
       Incrementally staged orders filtered by partition (file_id).
       Each dbt invocation processes a single file by passing
@@ -34,11 +37,17 @@ models:
                 expression: "order_total = subtotal + tax_paid"
 
   - name: file_orders_rejects
+    config:
+      tags:
+        - chain1
     description: >
       Rejected rows that failed one or more assertions in the stage layer.
       Retains the exceptions column for audit and investigation.
 
   - name: file_orders_refined
+    config:
+      tags:
+        - chain1
     description: >
       Clean rows that passed all assertions. This is the table downstream
       consumers should reference — it is partition-unaware and always
@@ -50,6 +59,9 @@ models:
           - not_null
 
   - name: hygiene_results
+    config:
+      tags:
+        - chain2
     description: >
       Append-only log of external hygiene API results. First dbt build
       creates the table; Dagster INSERTs raw API responses with an
@@ -65,6 +77,9 @@ models:
           Used by name_address to incrementally pick up only new results.
 
   - name: name_address
+    config:
+      tags:
+        - chain2
     description: >
       Terminal address table built by merging hygiene_results with refined
       order data. Dagster triggers this model after writing to
