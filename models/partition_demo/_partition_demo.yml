@@ -98,3 +98,9 @@ models:
         description: >
           Carried through from hygiene_results. Tracks when the latest
           hygiene result was loaded; used as the incremental high-water mark.
+
+groups:
+  - name: acxiom_demo
+    owner:
+      name: Tyler Rouze
+      email: tyler.rouze@dbtlabs.com
