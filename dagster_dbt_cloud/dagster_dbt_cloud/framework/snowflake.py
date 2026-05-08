@@ -13,14 +13,12 @@ class SnowflakeResource(dg.ConfigurableResource):
     user: str = Field(description="Snowflake username.")
     warehouse: str = Field(description="Snowflake warehouse name.")
     database: str = Field(description="Snowflake database name.")
-    schema_name: str = Field(default="TROUZE", description="Snowflake schema name.")
     hygiene_results_database: str | None = Field(
         default=None,
         description="Optional database override for hygiene_results writes.",
     )
-    hygiene_results_schema: str | None = Field(
-        default=None,
-        description="Optional schema override for hygiene_results writes.",
+    hygiene_results_schema: str = Field(
+        description="Schema for hygiene_results writes.",
     )
     hygiene_results_table: str = Field(
         default="hygiene_results",
@@ -41,7 +39,6 @@ class SnowflakeResource(dg.ConfigurableResource):
             user=self.user,
             warehouse=self.warehouse,
             database=self.database,
-            schema=self.schema_name,
             role=self.role or os.getenv("SNOWFLAKE_ROLE") or os.getenv("ROLE"),
         )
         if self.private_key_path:
@@ -90,7 +87,7 @@ class SnowflakeResource(dg.ConfigurableResource):
         resolved_target_relation = target_relation
         if not resolved_target_relation:
             target_database = self.hygiene_results_database or self.database
-            target_schema = self.hygiene_results_schema or self.schema_name
+            target_schema = self.hygiene_results_schema
             target_table = self.hygiene_results_table
             resolved_target_relation = (
                 f'"{target_database}"."{target_schema}"."{target_table}"'
@@ -162,7 +159,7 @@ def build_snowflake_resource() -> SnowflakeResource:
         user=os.environ["SNOWFLAKE_USER"],
         warehouse=os.environ["SNOWFLAKE_WAREHOUSE"],
         database=os.environ["SNOWFLAKE_DATABASE"],
-        schema_name=os.environ.get("SNOWFLAKE_SCHEMA", "TROUZE"),
+        hygiene_results_schema=os.environ["SNOWFLAKE_SCHEMA"],
         private_key_path=os.environ.get("SNOWFLAKE_KEY_PATH"),
         private_key_passphrase=os.environ.get("SNOWFLAKE_PASSPHRASE"),
         password=os.environ.get("SNOWFLAKE_PASSWORD"),
