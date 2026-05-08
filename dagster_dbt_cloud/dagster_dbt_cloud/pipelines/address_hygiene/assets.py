@@ -18,7 +18,10 @@ from dagster_dbt_cloud.framework.snowflake import (
     dedupe_pending_rows,
     simulate_hygiene_api,
 )
-from dagster_dbt_cloud.framework.sources import find_function_location_in_manifest
+from dagster_dbt_cloud.framework.sources import (
+    find_function_location_in_manifest,
+    find_model_location_in_manifest,
+)
 
 from .partitions import file_partitions
 
@@ -107,7 +110,12 @@ def hygiene_mock(
 
     deduped = dedupe_pending_rows(pending)
     results = simulate_hygiene_api(deduped)
-    snowflake.insert_hygiene_results(results)
+
+    hr_db, hr_schema, hr_name = find_model_location_in_manifest(
+        fresh_manifest, "hygiene_results"
+    )
+    target_relation = f'"{hr_db}"."{hr_schema}"."{hr_name}"'
+    snowflake.insert_hygiene_results(results, target_relation=target_relation)
 
     return dg.MaterializeResult(
         metadata={

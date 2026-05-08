@@ -13,17 +13,6 @@ class SnowflakeResource(dg.ConfigurableResource):
     user: str = Field(description="Snowflake username.")
     warehouse: str = Field(description="Snowflake warehouse name.")
     database: str = Field(description="Snowflake database name.")
-    hygiene_results_database: str | None = Field(
-        default=None,
-        description="Optional database override for hygiene_results writes.",
-    )
-    hygiene_results_schema: str = Field(
-        description="Schema for hygiene_results writes.",
-    )
-    hygiene_results_table: str = Field(
-        default="hygiene_results",
-        description="Target table name for hygiene result inserts.",
-    )
     password: str | None = Field(default=None, description="Optional Snowflake password.")
     private_key_path: str | None = Field(
         default=None, description="Optional path to Snowflake RSA private key."
@@ -68,7 +57,7 @@ class SnowflakeResource(dg.ConfigurableResource):
                 return [dict(zip(columns, row)) for row in cursor.fetchall()]
 
     def insert_hygiene_results(
-        self, rows: list[dict[str, Any]], target_relation: str | None = None
+        self, rows: list[dict[str, Any]], target_relation: str
     ) -> None:
         if not rows:
             return
@@ -84,17 +73,8 @@ class SnowflakeResource(dg.ConfigurableResource):
             for row in rows
         ]
 
-        resolved_target_relation = target_relation
-        if not resolved_target_relation:
-            target_database = self.hygiene_results_database or self.database
-            target_schema = self.hygiene_results_schema
-            target_table = self.hygiene_results_table
-            resolved_target_relation = (
-                f'"{target_database}"."{target_schema}"."{target_table}"'
-            )
-
         insert_sql = f"""
-            insert into {resolved_target_relation}
+            insert into {target_relation}
             (
                 customer_id,
                 hygiene_status,
@@ -159,7 +139,6 @@ def build_snowflake_resource() -> SnowflakeResource:
         user=os.environ["SNOWFLAKE_USER"],
         warehouse=os.environ["SNOWFLAKE_WAREHOUSE"],
         database=os.environ["SNOWFLAKE_DATABASE"],
-        hygiene_results_schema=os.environ["SNOWFLAKE_SCHEMA"],
         private_key_path=os.environ.get("SNOWFLAKE_KEY_PATH"),
         private_key_passphrase=os.environ.get("SNOWFLAKE_PASSPHRASE"),
         password=os.environ.get("SNOWFLAKE_PASSWORD"),

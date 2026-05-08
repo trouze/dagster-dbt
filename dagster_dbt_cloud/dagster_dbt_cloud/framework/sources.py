@@ -37,6 +37,17 @@ def find_function_location_in_manifest(
     raise ValueError(f"dbt function '{function_name}' not found in manifest functions")
 
 
+def find_model_location_in_manifest(
+    manifest: Mapping[str, Any],
+    model_name: str,
+) -> tuple[str, str, str]:
+    """Return (database, schema, identifier) for a dbt model by name."""
+    for node in manifest.get("nodes", {}).values():
+        if node.get("resource_type") == "model" and node.get("name") == model_name:
+            return node["database"], node["schema"], node.get("alias") or node["name"]
+    raise ValueError(f"dbt model '{model_name}' not found in manifest nodes")
+
+
 def get_source_location(
     workspace: DbtCloudWorkspace,
     source_name: str,
