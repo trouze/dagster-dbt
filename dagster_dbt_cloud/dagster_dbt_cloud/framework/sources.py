@@ -66,3 +66,13 @@ def get_function_location(
     return find_function_location_in_manifest(
         workspace.get_or_fetch_workspace_data().manifest, function_name
     )
+
+
+def get_model_location(
+    workspace: DbtCloudWorkspace,
+    model_name: str,
+) -> tuple[str, str, str]:
+    """Return (database, schema, identifier) for a dbt model (cached manifest)."""
+    return find_model_location_in_manifest(
+        workspace.get_or_fetch_workspace_data().manifest, model_name
+    )

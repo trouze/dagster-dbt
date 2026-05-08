@@ -2,7 +2,10 @@
 
 - One AssetsDefinition per dbt model in the `acxiom_demo` group, each its
   own op (independent retry boundary, one dbt Cloud run per model).
-- `hygiene_mock`: bridge between chain1 and chain2 — calls the dbt-managed
+- `address_hygiene_pending_function`: non-partitioned setup asset that
+  builds the dbt-managed UDTF. Materialize once at startup; rematerialize
+  if the function definition changes.
+- `hygiene_mock`: bridge between chain1 and chain2 — calls the
   `address_hygiene_pending` function, runs results through a fake hygiene
   API, and inserts into `hygiene_results`.
 """
@@ -12,7 +15,10 @@ from collections.abc import Sequence
 import dagster as dg
 from dagster_dbt.cloud_v2.resources import DbtCloudWorkspace
 
-from dagster_dbt_cloud.framework.dbt_runner import build_dbt_chain_assets
+from dagster_dbt_cloud.framework.dbt_runner import (
+    DBT_CLOUD_RUN_TIMEOUT_SECONDS,
+    build_dbt_chain_assets,
+)
 from dagster_dbt_cloud.framework.snowflake import (
     SnowflakeResource,
     dedupe_pending_rows,
@@ -20,7 +26,8 @@ from dagster_dbt_cloud.framework.snowflake import (
 )
 from dagster_dbt_cloud.framework.sources import (
     find_function_location_in_manifest,
-    find_model_location_in_manifest,
+    get_function_location,
+    get_model_location,
 )
 
 from .partitions import file_partitions
@@ -29,6 +36,7 @@ from .partitions import file_partitions
 # translator uses the configured schema as the asset-key prefix, so
 # `name_address` lives at `["partition_demo", "name_address"]`.
 NAME_ADDRESS_KEY = dg.AssetKey(["partition_demo", "name_address"])
+ADDRESS_HYGIENE_PENDING_FUNCTION_KEY = dg.AssetKey("address_hygiene_pending_function")
 
 # chain1 builds every dbt model in the acxiom_demo group. We select on group
 # rather than `name_address.upstream()` because rejects (a sibling of refined
@@ -53,9 +61,35 @@ def build_dbt_assets(
 
 
 @dg.asset(
+    key=ADDRESS_HYGIENE_PENDING_FUNCTION_KEY,
+    description=(
+        "Builds the dbt-managed address_hygiene_pending UDTF in Snowflake. "
+        "Non-partitioned: materialize once before running hygiene_mock; "
+        "rematerialize if the function definition changes."
+    ),
+)
+def address_hygiene_pending_function(
+    context: dg.AssetExecutionContext,
+    dbt_cloud_workspace: DbtCloudWorkspace,
+) -> dg.MaterializeResult:
+    invocation = dbt_cloud_workspace.cli(
+        args=["build", "--select", "address_hygiene_pending"],
+    )
+    list(invocation.wait(timeout=DBT_CLOUD_RUN_TIMEOUT_SECONDS))
+
+    fresh_manifest = invocation.run_handler.get_manifest()
+    db, schema = find_function_location_in_manifest(
+        fresh_manifest, "address_hygiene_pending"
+    )
+    return dg.MaterializeResult(
+        metadata={"database": db, "schema": schema}
+    )
+
+
+@dg.asset(
     name="hygiene_mock",
     partitions_def=file_partitions,
-    deps=[NAME_ADDRESS_KEY],
+    deps=[NAME_ADDRESS_KEY, ADDRESS_HYGIENE_PENDING_FUNCTION_KEY],
     description=(
         "External hygiene API mock. For a partition, calls the "
         "address_hygiene_pending function, runs results through the fake "
@@ -69,39 +103,7 @@ def hygiene_mock(
 ) -> dg.MaterializeResult:
     partition_id = context.partition_key
 
-    # Functions are dbt resources but not Dagster assets, so the chain1
-    # selection skips them. Build the function on-demand before calling it;
-    # the function definition isn't partition-dependent, so this is
-    # idempotent (and cheap).
-    context.log.info("Building dbt function: address_hygiene_pending")
-    invocation = dbt_cloud_workspace.cli(
-        args=["build", "--select", "address_hygiene_pending"],
-    )
-    list(invocation.wait())
-
-    # Pull the location from the *just-completed* run's manifest. The
-    # workspace's cached manifest can lag behind project edits (schema
-    # config changes, new functions) and would resolve to a stale
-    # database/schema.
-    fresh_manifest = invocation.run_handler.get_manifest()
-    fn_entry = next(
-        (
-            n
-            for n in fresh_manifest.get("functions", {}).values()
-            if n.get("name") == "address_hygiene_pending"
-        ),
-        None,
-    )
-    context.log.info(
-        f"address_hygiene_pending manifest entry: "
-        f"database={fn_entry and fn_entry.get('database')}, "
-        f"schema={fn_entry and fn_entry.get('schema')}, "
-        f"relation_name={fn_entry and fn_entry.get('relation_name')}, "
-        f"config.schema={fn_entry and fn_entry.get('config', {}).get('schema')}"
-    )
-    db, schema = find_function_location_in_manifest(
-        fresh_manifest, "address_hygiene_pending"
-    )
+    db, schema = get_function_location(dbt_cloud_workspace, "address_hygiene_pending")
     sql = f"SELECT * FROM TABLE({db}.{schema}.address_hygiene_pending(%s))"
     pending = snowflake.execute(sql, (partition_id,))
     context.log.info(
@@ -111,10 +113,8 @@ def hygiene_mock(
     deduped = dedupe_pending_rows(pending)
     results = simulate_hygiene_api(deduped)
 
-    hr_db, hr_schema, hr_name = find_model_location_in_manifest(
-        fresh_manifest, "hygiene_results"
-    )
-    target_relation = f'"{hr_db}"."{hr_schema}"."{hr_name}"'
+    hr_db, hr_schema, hr_name = get_model_location(dbt_cloud_workspace, "hygiene_results")
+    target_relation = f"{hr_db}.{hr_schema}.{hr_name}"
     snowflake.insert_hygiene_results(results, target_relation=target_relation)
 
     return dg.MaterializeResult(

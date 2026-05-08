@@ -33,6 +33,10 @@ from dagster_dbt.cloud_v2.cli_invocation import DbtCloudCliInvocation
 from dagster_dbt.cloud_v2.resources import DbtCloudWorkspace
 from dagster_dbt.dagster_dbt_translator import DagsterDbtTranslator
 
+# dbt Cloud's default poll timeout is 60s — too short for real builds. Bump to
+# 30 min so per-model runs don't fail spuriously while waiting on the run pool.
+DBT_CLOUD_RUN_TIMEOUT_SECONDS = 1800
+
 
 def build_dbt_chain_assets(
     workspace: DbtCloudWorkspace,
@@ -117,6 +121,6 @@ def _build_one_dbt_asset(
             dagster_dbt_translator=translator,
             context=context,
         )
-        yield from invocation.wait()
+        yield from invocation.wait(timeout=DBT_CLOUD_RUN_TIMEOUT_SECONDS)
 
     return _dbt_model_asset

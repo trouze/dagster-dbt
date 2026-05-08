@@ -10,7 +10,7 @@ from dagster_dbt.cloud_v2.resources import DbtCloudWorkspace
 
 from dagster_dbt_cloud.framework.pool_lookup import fetch_pool_job_ids
 
-from .assets import build_dbt_assets, hygiene_mock
+from .assets import address_hygiene_pending_function, build_dbt_assets, hygiene_mock
 from .jobs import build_chain_jobs, hygiene_job
 from .sensor import build_cascade_sensors, build_file_sensor
 
@@ -25,7 +25,7 @@ def build_pipeline_defs(workspace: DbtCloudWorkspace) -> dg.Definitions:
     )
 
     return dg.Definitions(
-        assets=[*dbt_chain_assets, hygiene_mock],
+        assets=[*dbt_chain_assets, address_hygiene_pending_function, hygiene_mock],
         jobs=[chain1_job, chain2_job, hygiene_job],
         sensors=[partition_file_sensor, chain1_to_hygiene, hygiene_to_chain2],
     )
