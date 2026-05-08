@@ -53,6 +53,10 @@ models:
       +schema: partition_demo
       +group: acxiom_demo
 
+functions:
+  +schema: partition_demo
+  +group: acxiom_demo
+
 seeds:
   t_jaffle_shop:
     +enabled: false

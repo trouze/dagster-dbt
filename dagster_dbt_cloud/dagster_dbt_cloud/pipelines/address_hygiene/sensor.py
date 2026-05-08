@@ -1,6 +1,10 @@
 """Discover new partition tables in Snowflake and register them as dynamic
 partitions. The demo surfaces every discovered partition as runnable from
 the UI; the sensor does not filter to "new" partitions.
+
+Also defines the cascade sensors that chain chain1 → hygiene_mock → chain2
+per partition. Asset deps already encode the order; jobs don't auto-cascade,
+so we watch for run success and fire the next stage with the same partition.
 """
 
 import dagster as dg
@@ -26,8 +30,10 @@ def build_file_sensor(chain1_job) -> dg.SensorDefinition:
         snowflake: SnowflakeResource,
     ) -> dg.SensorResult:
         db, schema = get_source_location(dbt_cloud_workspace, "partition_demo")
+        # Identifiers unquoted: matches dbt's default Snowflake quoting policy
+        # and lets Snowflake case-fold to the actual stored identifier.
         rows = snowflake.execute(
-            f'SHOW TABLES LIKE \'{INBOUND_TABLE_PREFIX}%\' IN SCHEMA "{db}"."{schema}"'
+            f"SHOW TABLES LIKE '{INBOUND_TABLE_PREFIX}%' IN SCHEMA {db}.{schema}"
         )
         # Snowflake SHOW TABLES returns a "name" column.
         table_names = [row.get("name") for row in rows if row.get("name")]
@@ -62,3 +68,37 @@ def build_file_sensor(chain1_job) -> dg.SensorDefinition:
         )
 
     return partition_file_sensor
+
+
+def build_cascade_sensors(
+    chain1_job: dg.JobDefinition,
+    hygiene_job: dg.JobDefinition,
+    chain2_job: dg.JobDefinition,
+) -> tuple[dg.SensorDefinition, dg.SensorDefinition]:
+    """Cascade chain1 → hygiene_mock → chain2 per partition on success."""
+
+    @dg.run_status_sensor(
+        name="partition_chain1_to_hygiene",
+        run_status=dg.DagsterRunStatus.SUCCESS,
+        monitored_jobs=[chain1_job],
+        request_job=hygiene_job,
+    )
+    def chain1_to_hygiene(context: dg.RunStatusSensorContext):
+        pk = context.dagster_run.tags.get("dagster/partition")
+        if not pk:
+            return
+        return dg.RunRequest(run_key=f"hygiene-{pk}", partition_key=pk)
+
+    @dg.run_status_sensor(
+        name="partition_hygiene_to_chain2",
+        run_status=dg.DagsterRunStatus.SUCCESS,
+        monitored_jobs=[hygiene_job],
+        request_job=chain2_job,
+    )
+    def hygiene_to_chain2(context: dg.RunStatusSensorContext):
+        pk = context.dagster_run.tags.get("dagster/partition")
+        if not pk:
+            return
+        return dg.RunRequest(run_key=f"chain2-{pk}", partition_key=pk)
+
+    return chain1_to_hygiene, hygiene_to_chain2

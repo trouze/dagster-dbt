@@ -8,7 +8,8 @@ functions:
       staleness_months threshold. Reusable across all hygiene overlays and
       callable from any warehouse client (Dagster, BI tools, notebooks).
     config:
-      schema: partition_demo
+      tags:
+        - chain1
     arguments:
       - name: last_hygiene_date
         data_type: date
@@ -32,7 +33,8 @@ functions:
       new records are returned; for periodic refreshes, lower the
       threshold to pick up stale records too.
     config:
-      schema: partition_demo
+      tags:
+        - chain1
     arguments:
       - name: p_file_id
         data_type: varchar

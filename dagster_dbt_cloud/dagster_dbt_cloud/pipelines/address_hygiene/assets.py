@@ -1,11 +1,13 @@
 """Assets for the address-hygiene pipeline.
 
-- `dbt_chain_assets`: one multi_asset covering every dbt model in the
-  `acxiom_demo` group; chain1 and chain2 jobs select subsets via op config.
+- One AssetsDefinition per dbt model in the `acxiom_demo` group, each its
+  own op (independent retry boundary, one dbt Cloud run per model).
 - `hygiene_mock`: bridge between chain1 and chain2 — calls the dbt-managed
   `address_hygiene_pending` function, runs results through a fake hygiene
   API, and inserts into `hygiene_results`.
 """
+
+from collections.abc import Sequence
 
 import dagster as dg
 from dagster_dbt.cloud_v2.resources import DbtCloudWorkspace
@@ -34,12 +36,15 @@ chain1_selection = dg.AssetSelection.keys(NAME_ADDRESS_KEY).upstream()
 chain2_selection = dg.AssetSelection.keys(NAME_ADDRESS_KEY)
 
 
-def build_dbt_assets(workspace: DbtCloudWorkspace) -> dg.AssetsDefinition:
+def build_dbt_assets(
+    workspace: DbtCloudWorkspace,
+    pool_job_ids: list[int],
+) -> Sequence[dg.AssetsDefinition]:
     return build_dbt_chain_assets(
         workspace,
-        name="dbt_chain_assets",
-        select="group:acxiom_demo",
+        group_name="acxiom_demo",
         partitions_def=file_partitions,
+        pool_job_ids=pool_job_ids,
     )
 
 
@@ -61,9 +66,7 @@ def hygiene_mock(
     partition_id = context.partition_key
 
     db, schema = get_function_location(dbt_cloud_workspace, "address_hygiene_pending")
-    sql = (
-        f'SELECT * FROM TABLE("{db}"."{schema}".address_hygiene_pending(%s))'
-    )
+    sql = f"SELECT * FROM TABLE({db}.{schema}.address_hygiene_pending(%s))"
     pending = snowflake.execute(sql, (partition_id,))
     context.log.info(
         f"address_hygiene_pending returned {len(pending)} rows for partition '{partition_id}'."
