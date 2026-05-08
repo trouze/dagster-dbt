@@ -7,3 +7,5 @@ env/
 .user.yml
 dbt_internal_packages/
 *__pycache__/
+.claude/
+gist/

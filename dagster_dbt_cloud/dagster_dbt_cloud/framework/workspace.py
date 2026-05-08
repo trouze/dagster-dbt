@@ -1,3 +1,9 @@
+"""Shared dbt Cloud workspace resource.
+
+One workspace per code location. Re-used across all pipelines so manifest
+parsing happens at most once per process.
+"""
+
 import dagster as dg
 from dagster_dbt.cloud_v2.resources import DbtCloudCredentials, DbtCloudWorkspace
 
