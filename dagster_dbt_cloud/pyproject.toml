@@ -13,16 +13,5 @@ dependencies = [
     "snowflake-connector-python",
 ]
 
-[project.optional-dependencies]
-dev = ["dagster-webserver"]
-
-[tool.uv.sources]
-dagster = { path = "/Users/tylerrouze/dev/dagster/python_modules/dagster", editable = true }
-dagster-pipes = { path = "/Users/tylerrouze/dev/dagster/python_modules/dagster-pipes", editable = true }
-dagster-shared = { path = "/Users/tylerrouze/dev/dagster/python_modules/libraries/dagster-shared", editable = true }
-dagster-graphql = { path = "/Users/tylerrouze/dev/dagster/python_modules/dagster-graphql", editable = true }
-dagster-webserver = { path = "/Users/tylerrouze/dev/dagster/python_modules/dagster-webserver", editable = true }
-dagster-dbt = { path = "/Users/tylerrouze/dev/dagster/python_modules/libraries/dagster-dbt", editable = true }
-
 [tool.dagster]
 module_name = "dagster_dbt_cloud.definitions"

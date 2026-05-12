@@ -1,5 +1,4 @@
 import os
-import time
 from datetime import datetime, timezone
 from typing import Any
 
@@ -113,21 +112,6 @@ def dedupe_pending_rows(pending_rows: list[dict[str, Any]]) -> list[dict[str, An
             continue
         deduped[str(customer_id)] = row
     return list(deduped.values())
-
-
-def call_hygiene_api_with_retry(
-    pending_rows: list[dict[str, Any]],
-    retries: int = 3,
-    base_sleep_seconds: int = 2,
-) -> list[dict[str, Any]]:
-    for attempt in range(1, retries + 1):
-        try:
-            return simulate_hygiene_api(pending_rows)
-        except Exception:
-            if attempt == retries:
-                raise
-            time.sleep(base_sleep_seconds * attempt)
-    return []
 
 
 def build_snowflake_resource() -> SnowflakeResource:

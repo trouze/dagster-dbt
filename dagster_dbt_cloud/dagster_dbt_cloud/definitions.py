@@ -3,12 +3,6 @@
 Merges shared infrastructure (resources, dbt Cloud polling sensor) with
 per-pipeline Definitions. To add a new pipeline, import its
 build_pipeline_defs and merge it here.
-
-Note: dbt_cloud_asset_specs is intentionally excluded. The @dbt_cloud_assets
-decorator in each pipeline's assets.py registers the same specs via
-workspace.load_asset_specs() internally — including both would produce
-duplicate asset key errors. The polling sensor works against those
-decorator-registered specs directly.
 """
 
 import dagster as dg

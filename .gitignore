@@ -9,3 +9,4 @@ dbt_internal_packages/
 *__pycache__/
 .claude/
 gist/
+*.tmp_dagster_home_*

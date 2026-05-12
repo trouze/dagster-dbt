@@ -1,10 +1,5 @@
 """Assets for the partition_demo pipeline.
 
-The two dbt stages use @dbt_cloud_assets, which calls workspace.load_asset_specs()
-internally — identical to @dg.multi_asset(specs=workspace.load_asset_specs(...)).
-This gives full dbt model lineage in the Dagster asset catalog while keeping
-pool routing in the function body.
-
   partition_series1   dbt build +file_orders_refined hygiene_results
       ↓  (deps declared via AssetsDefinition reference)
   hygiene_mock        Python: query refined → mock API → insert hygiene_results
@@ -19,12 +14,11 @@ sources before building each model, so no separate preflight step is needed.
 import json
 
 import dagster as dg
-from dagster_dbt.cloud_v2 import dbt_cloud_assets
 from dagster_dbt.cloud_v2.cli_invocation import DbtCloudCliInvocation
 from dagster_dbt.cloud_v2.resources import DbtCloudWorkspace
 from dagster_dbt.dagster_dbt_translator import DagsterDbtTranslator
 
-from dagster_dbt_cloud.framework.dbt_runner import DBT_CLOUD_RUN_TIMEOUT_SECONDS
+from dagster_dbt_cloud.framework.dbt_runner import DBT_CLOUD_RUN_TIMEOUT_SECONDS, dbt_cloud_assets
 from dagster_dbt_cloud.framework.sources import get_model_location
 from dagster_dbt_cloud.resources.snowflake import (
     SnowflakeResource,
