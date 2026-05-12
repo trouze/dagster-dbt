@@ -256,6 +256,7 @@ def _build_one_dbt_asset(
         name=op_name,
         specs=[spec],
         check_specs=check_specs,
+        can_subset=True,
         op_tags=op_tags,
         partitions_def=partitions_def,
         retry_policy=retry_policy,
