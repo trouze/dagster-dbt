@@ -1,27 +1,15 @@
-"""Reusable per-model dbt-Cloud-backed asset factory.
+"""Reusable dbt-Cloud-backed asset factories.
 
-`build_dbt_chain_assets(workspace, group_name=..., ...)` returns one
-`AssetsDefinition` per dbt model in the named dbt group. Each definition is
-its own op in Dagster's asset job, which means:
+`build_dbt_chain_assets` — one AssetsDefinition per dbt model in a named
+group. Each definition is its own op (independent retry boundary, one dbt
+Cloud run per model). Use when per-model retry granularity matters.
 
-  - Independent retry boundaries: re-executing from failure only re-runs
-    the failed model (and any downstream blocked by it).
-  - One `DbtCloudCliInvocation.run()` per model, routed deterministically
-    across the pool by `hash((partition_key, unique_id))`.
-  - Concurrency comes from Dagster's executor running independent ops in
-    parallel — no manual wave/topo logic; the asset graph handles ordering.
+For the common case of routing a dbt selection across a job pool by partition,
+use @dbt_cloud_assets directly in your pipeline's assets.py — it produces the
+same multi_asset with full dbt lineage, and your function body controls pool
+routing. See pipelines/partition_demo/assets.py for the pattern.
 
-Pool IDs are captured in closure at definition time. No op config is needed
-on the asset jobs.
-
-Note on parse jobs: we deliberately do NOT call `load_dbt_cloud_asset_specs`
-here. That helper internally instantiates a freshly-configured workspace
-(via `process_config_and_initialize_cm`), so its `@cached_method` for
-`fetch_workspace_data` does not share with the `workspace` we hold —
-calling both would trigger two adhoc `dbt parse` runs on dbt Cloud at
-definition time. Instead we fetch the manifest once via
-`get_or_fetch_workspace_data()` and build specs directly with the
-translator.
+Pool IDs are captured in closure at definition time. No op config needed.
 """
 
 import json
@@ -33,10 +21,13 @@ from dagster_dbt.cloud_v2.cli_invocation import DbtCloudCliInvocation
 from dagster_dbt.cloud_v2.resources import DbtCloudWorkspace
 from dagster_dbt.dagster_dbt_translator import DagsterDbtTranslator
 
-# dbt Cloud's default poll timeout is 60s — too short for real builds. Bump to
-# 30 min so per-model runs don't fail spuriously while waiting on the run pool.
+# Bump poll timeout to 30 min so runs don't fail spuriously while waiting.
 DBT_CLOUD_RUN_TIMEOUT_SECONDS = 1800
 
+
+# ---------------------------------------------------------------------------
+# Per-model factory (fine-grained retry)
+# ---------------------------------------------------------------------------
 
 def build_dbt_chain_assets(
     workspace: DbtCloudWorkspace,
@@ -99,9 +90,7 @@ def _build_one_dbt_asset(
         dbt_cloud_workspace: DbtCloudWorkspace,
     ):
         partition_key = context.partition_key
-        chosen_job_id = pool_job_ids[
-            hash((partition_key, unique_id)) % len(pool_job_ids)
-        ]
+        job_id = pool_job_ids[hash((partition_key, unique_id)) % len(pool_job_ids)]
         args = [
             "build",
             "--select",
@@ -110,11 +99,11 @@ def _build_one_dbt_asset(
             json.dumps({"partition_id": partition_key}),
         ]
         context.log.info(
-            f"dbt Cloud job {chosen_job_id} :: {fqn} (partition '{partition_key}')"
+            f"dbt Cloud job {job_id} :: {fqn} (partition '{partition_key}')"
         )
         ws_data = dbt_cloud_workspace.get_or_fetch_workspace_data()
         invocation = DbtCloudCliInvocation.run(
-            job_id=chosen_job_id,
+            job_id=job_id,
             args=args,
             client=dbt_cloud_workspace.get_client(),
             manifest=ws_data.manifest,
@@ -124,3 +113,5 @@ def _build_one_dbt_asset(
         yield from invocation.wait(timeout=DBT_CLOUD_RUN_TIMEOUT_SECONDS)
 
     return _dbt_model_asset
+
+

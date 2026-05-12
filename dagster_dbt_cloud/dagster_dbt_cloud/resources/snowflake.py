@@ -41,7 +41,6 @@ class SnowflakeResource(dg.ConfigurableResource):
                 "Snowflake auth not configured. Set private_key_path (preferred) "
                 "or password on SnowflakeResource."
             )
-
         return snowflake.connector.connect(**connect_kwargs)
 
     def execute(self, sql: str, params: tuple[Any, ...] | None = None) -> list[dict[str, Any]]:
@@ -61,7 +60,6 @@ class SnowflakeResource(dg.ConfigurableResource):
     ) -> None:
         if not rows:
             return
-
         values = [
             (
                 row["customer_id"],
@@ -72,7 +70,6 @@ class SnowflakeResource(dg.ConfigurableResource):
             )
             for row in rows
         ]
-
         insert_sql = f"""
             insert into {target_relation}
             (

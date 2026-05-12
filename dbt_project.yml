@@ -39,23 +39,9 @@ models:
   t_jaffle_shop:
     +static_analysis: strict
     # Config indicated by + and applies to all files under models/example/
-    staging:
-      +materialized: view
-      +schema: jaffle_staging
-    int:
-      +materialized: table
-      +schema: jaffle_int
-    marts:
-      +materialized: table
-      +schema: jaffle_mart
-      +group: mart
     partition_demo:
       +schema: partition_demo
       +group: acxiom_demo
-
-functions:
-  +schema: partition_demo
-  +group: acxiom_demo
 
 seeds:
   t_jaffle_shop:

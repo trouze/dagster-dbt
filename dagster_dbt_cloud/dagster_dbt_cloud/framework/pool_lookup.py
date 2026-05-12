@@ -1,7 +1,7 @@
 """One-shot lookup of dbt Cloud job IDs by name prefix.
 
 Pipelines that fan partitions across a pool of identically-named dbt Cloud
-jobs (e.g. `partition_runner_NN`) resolve those IDs once at code-location
+jobs (e.g. partition_runner_NN) resolve those IDs once at code-location
 load time by listing jobs in the configured project/environment.
 """
 
@@ -12,13 +12,13 @@ def fetch_pool_job_ids(
     workspace: DbtCloudWorkspace,
     name_prefix: str,
 ) -> list[int]:
-    """Return the dbt Cloud job IDs whose names start with `name_prefix`.
+    """Return dbt Cloud job IDs whose names start with `name_prefix`.
 
     Scoped to the workspace's project and environment.
     """
     jobs = workspace.get_client().list_jobs(
-        project_id=workspace.project_id,
-        environment_id=workspace.environment_id,
+        project_id=int(workspace.project_id),
+        environment_id=int(workspace.environment_id),
     )
     job_ids = [
         int(job["id"])
