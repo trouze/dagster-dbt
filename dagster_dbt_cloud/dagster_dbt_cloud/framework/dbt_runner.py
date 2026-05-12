@@ -163,6 +163,7 @@ def dbt_cloud_assets(
     dagster_dbt_translator: DagsterDbtTranslator | None = None,
     partitions_def: PartitionsDefinition | None = None,
     backfill_policy: BackfillPolicy | None = None,
+    deps: dg.CoercibleToAssetDepsDefinition | None = None,
 ) -> Callable[[Callable[..., Any]], AssetsDefinition]:
     translator = dagster_dbt_translator or DagsterDbtTranslator()
 
@@ -218,6 +219,7 @@ def dbt_cloud_assets(
             op_tags=op_tags,
             partitions_def=partitions_def,
             backfill_policy=backfill_policy,
+            deps=deps,
         )(fn)
 
     return decorator

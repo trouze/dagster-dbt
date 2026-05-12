@@ -113,6 +113,7 @@ def build_pipeline_assets(
         workspace=workspace,
         select="name_address",
         partitions_def=file_partitions,
+        deps=[hygiene_mock],
     )
     def partition_final(
         context: dg.AssetExecutionContext,
