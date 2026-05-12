@@ -1,8 +1,0 @@
-snapshots:
-  - name: customer_history
-    relation: source('jaffle_shop', 'raw_customers')
-    description:  "Customer history"
-    config:
-      strategy: timestamp
-      unique_key: ID
-      updated_at: LOAD_DTS
