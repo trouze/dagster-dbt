@@ -102,13 +102,15 @@ def dbt_cloud_assets(
         project=None,
     )
 
+    extra = {"deps": deps} if deps is not None else {}
     asset_specs = [
         spec.replace_attributes(kinds={"dbtcloud"} | spec.kinds - {"dbt"}).merge_attributes(
             metadata={
                 DAGSTER_DBT_CLOUD_ACCOUNT_ID_METADATA_KEY: workspace.credentials.account_id,
                 DAGSTER_DBT_CLOUD_PROJECT_ID_METADATA_KEY: workspace_data.project_id,
                 DAGSTER_DBT_CLOUD_ENVIRONMENT_ID_METADATA_KEY: workspace_data.environment_id,
-            }
+            },
+            **extra,
         )
         for spec in asset_specs
     ]
@@ -142,7 +144,6 @@ def dbt_cloud_assets(
             op_tags=op_tags,
             partitions_def=partitions_def,
             backfill_policy=backfill_policy,
-            deps=deps,
         )(fn)
 
     return decorator
