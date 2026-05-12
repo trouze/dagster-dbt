@@ -9,16 +9,18 @@
 Both dbt stages route partitions to pool jobs via hash(partition_key) % N.
 Source data tests run implicitly — dbt build with the + selector tests upstream
 sources before building each model, so no separate preflight step is needed.
+
+On retry, run_or_retry_dbt calls the dbt Cloud /retry/ API so that only the
+failed models and their downstream deps re-run, not the full selection.
 """
 
 import json
 
 import dagster as dg
-from dagster_dbt.cloud_v2.cli_invocation import DbtCloudCliInvocation
 from dagster_dbt.cloud_v2.resources import DbtCloudWorkspace
 from dagster_dbt.dagster_dbt_translator import DagsterDbtTranslator
 
-from dagster_dbt_cloud.framework.dbt_runner import DBT_CLOUD_RUN_TIMEOUT_SECONDS, dbt_cloud_assets
+from dagster_dbt_cloud.framework.dbt_runner import dbt_cloud_assets, run_or_retry_dbt
 from dagster_dbt_cloud.framework.sources import get_model_location
 from dagster_dbt_cloud.resources.snowflake import (
     SnowflakeResource,
@@ -51,24 +53,19 @@ def build_pipeline_assets(
     ):
         partition_key = context.partition_key
         job_id = pool_job_ids[hash(partition_key) % len(pool_job_ids)]
-        context.log.info(
-            f"dbt Cloud job {job_id} :: build '+file_orders_refined hygiene_results'"
-            f" (partition '{partition_key}')"
-        )
         ws_data = dbt_cloud_workspace.get_or_fetch_workspace_data()
-        invocation = DbtCloudCliInvocation.run(
+        yield from run_or_retry_dbt(
+            context,
             job_id=job_id,
+            workspace=dbt_cloud_workspace,
+            manifest=ws_data.manifest,
+            translator=translator,
             args=[
                 "build",
                 "--select", "+file_orders_refined hygiene_results",
                 "--vars", json.dumps({"partition_id": partition_key}),
             ],
-            client=dbt_cloud_workspace.get_client(),
-            manifest=ws_data.manifest,
-            dagster_dbt_translator=translator,
-            context=context,
         )
-        yield from invocation.wait(timeout=DBT_CLOUD_RUN_TIMEOUT_SECONDS)
 
     @dg.asset(
         name="hygiene_mock",
@@ -123,22 +120,18 @@ def build_pipeline_assets(
     ):
         partition_key = context.partition_key
         job_id = pool_job_ids[hash(partition_key) % len(pool_job_ids)]
-        context.log.info(
-            f"dbt Cloud job {job_id} :: build 'name_address' (partition '{partition_key}')"
-        )
         ws_data = dbt_cloud_workspace.get_or_fetch_workspace_data()
-        invocation = DbtCloudCliInvocation.run(
+        yield from run_or_retry_dbt(
+            context,
             job_id=job_id,
+            workspace=dbt_cloud_workspace,
+            manifest=ws_data.manifest,
+            translator=translator,
             args=[
                 "build",
                 "--select", "name_address",
                 "--vars", json.dumps({"partition_id": partition_key}),
             ],
-            client=dbt_cloud_workspace.get_client(),
-            manifest=ws_data.manifest,
-            dagster_dbt_translator=translator,
-            context=context,
         )
-        yield from invocation.wait(timeout=DBT_CLOUD_RUN_TIMEOUT_SECONDS)
 
     return partition_series1, hygiene_mock, partition_final
