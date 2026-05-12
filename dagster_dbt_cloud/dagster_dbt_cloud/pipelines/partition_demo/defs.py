@@ -18,5 +18,5 @@ POOL_JOB_PREFIX = "partition_runner"
 
 def build_pipeline_defs(workspace: DbtCloudWorkspace) -> dg.Definitions:
     pool_job_ids = fetch_pool_job_ids(workspace, name_prefix=POOL_JOB_PREFIX)
-    series1, hygiene_mock, final = build_pipeline_assets(workspace, pool_job_ids)
-    return dg.Definitions(assets=[series1, hygiene_mock, final])
+    assets = build_pipeline_assets(workspace, pool_job_ids)
+    return dg.Definitions(assets=list(assets))

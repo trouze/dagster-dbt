@@ -1,27 +1,23 @@
 """Assets for the partition_demo pipeline.
 
-  partition_series1   dbt build +file_orders_refined hygiene_results
-      ↓  (deps declared via AssetsDefinition reference)
+  chain1              one isolated dbt job per model in "+file_orders_refined hygiene_results"
+      ↓  (deps derived from chain1 asset keys)
   hygiene_mock        Python: query refined → mock API → insert hygiene_results
       ↓  (cascade sensor, cross-job)
   partition_final     dbt build name_address
 
-Both dbt stages route partitions to pool jobs via hash(partition_key) % N.
-Source data tests run implicitly — dbt build with the + selector tests upstream
-sources before building each model, so no separate preflight step is needed.
+chain1 routes each model-partition to a pool job via hash((partition_key, unique_id)).
+Source data tests run per-model — dbt build selects the individual model fqn so
+its upstream source tests are included.
 """
 
-import json
+from collections.abc import Sequence
 
 import dagster as dg
-from dagster_dbt.cloud_v2.cli_invocation import DbtCloudCliInvocation
 from dagster_dbt.cloud_v2.resources import DbtCloudWorkspace
-from dagster_dbt.dagster_dbt_translator import DagsterDbtTranslator
 
 from dagster_dbt_cloud.framework.dbt_runner import (
-    DBT_CLOUD_RUN_TIMEOUT_SECONDS,
-    dbt_cloud_assets,
-    log_compiled_sql,
+    build_dbt_chain_assets,
 )
 from dagster_dbt_cloud.framework.sources import get_model_location
 from dagster_dbt_cloud.resources.snowflake import (
@@ -36,45 +32,26 @@ from .partitions import file_partitions
 def build_pipeline_assets(
     workspace: DbtCloudWorkspace,
     pool_job_ids: list[int],
-) -> tuple[dg.AssetsDefinition, dg.AssetsDefinition, dg.AssetsDefinition]:
-    """Build the three pipeline assets, capturing pool_job_ids in closure.
+) -> Sequence[dg.AssetsDefinition]:
+    """Build all pipeline assets, capturing pool_job_ids in closure.
 
-    Returns (partition_series1, hygiene_mock, partition_final).
-    Call once from build_pipeline_defs after pool IDs are resolved.
+    Returns a flat list: one AssetsDefinition per model in chain1, plus
+    hygiene_mock and partition_final. Call once from build_pipeline_defs
+    after pool IDs are resolved.
     """
-    translator = DagsterDbtTranslator()
-
-    @dbt_cloud_assets(
-        workspace=workspace,
+    chain1_assets = build_dbt_chain_assets(
+        workspace,
         select="+file_orders_refined hygiene_results",
         partitions_def=file_partitions,
+        pool_job_ids=pool_job_ids,
     )
-    def partition_series1(
-        context: dg.AssetExecutionContext,
-        dbt_cloud_workspace: DbtCloudWorkspace,
-    ):
-        partition_key = context.partition_key
-        job_id = pool_job_ids[hash(partition_key) % len(pool_job_ids)]
-        ws_data = dbt_cloud_workspace.get_or_fetch_workspace_data()
-        invocation = DbtCloudCliInvocation.run(
-            job_id=job_id,
-            args=[
-                "build",
-                "--select", "+file_orders_refined hygiene_results",
-                "--vars", json.dumps({"partition_id": partition_key}),
-            ],
-            client=dbt_cloud_workspace.get_client(),
-            manifest=ws_data.manifest,
-            dagster_dbt_translator=translator,
-            context=context,
-        )
-        yield from invocation.wait(timeout=DBT_CLOUD_RUN_TIMEOUT_SECONDS)
-        log_compiled_sql(invocation, context)
+
+    chain1_keys = [key for asset in chain1_assets for key in asset.keys]
 
     @dg.asset(
         name="hygiene_mock",
         partitions_def=file_partitions,
-        deps=[partition_series1],
+        deps=chain1_keys,
         description=(
             "Queries file_orders_refined for the partition, sends eligible records "
             "through the mock hygiene API, and inserts results into hygiene_results. "
@@ -113,32 +90,12 @@ def build_pipeline_assets(
             }
         )
 
-    @dbt_cloud_assets(
-        workspace=workspace,
+    chain2_assets = build_dbt_chain_assets(
+        workspace,
         select="name_address",
         partitions_def=file_partitions,
+        pool_job_ids=pool_job_ids,
         deps=[hygiene_mock],
     )
-    def partition_final(
-        context: dg.AssetExecutionContext,
-        dbt_cloud_workspace: DbtCloudWorkspace,
-    ):
-        partition_key = context.partition_key
-        job_id = pool_job_ids[hash(partition_key) % len(pool_job_ids)]
-        ws_data = dbt_cloud_workspace.get_or_fetch_workspace_data()
-        invocation = DbtCloudCliInvocation.run(
-            job_id=job_id,
-            args=[
-                "build",
-                "--select", "name_address",
-                "--vars", json.dumps({"partition_id": partition_key}),
-            ],
-            client=dbt_cloud_workspace.get_client(),
-            manifest=ws_data.manifest,
-            dagster_dbt_translator=translator,
-            context=context,
-        )
-        yield from invocation.wait(timeout=DBT_CLOUD_RUN_TIMEOUT_SECONDS)
-        log_compiled_sql(invocation, context)
 
-    return partition_series1, hygiene_mock, partition_final
+    return [*chain1_assets, hygiene_mock, *chain2_assets]
