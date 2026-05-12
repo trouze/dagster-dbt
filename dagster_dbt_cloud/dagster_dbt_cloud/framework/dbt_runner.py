@@ -286,6 +286,8 @@ def _build_one_dbt_asset(
             dagster_dbt_translator=translator,
             context=context,
         )
-        yield from invocation.wait(timeout=DBT_CLOUD_RUN_TIMEOUT_SECONDS)
+        events = list(invocation.wait(timeout=DBT_CLOUD_RUN_TIMEOUT_SECONDS))
+        log_compiled_sql(invocation, context)
+        yield from events
 
     return _dbt_model_asset
