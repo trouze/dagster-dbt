@@ -18,7 +18,11 @@ from dagster_dbt.cloud_v2.cli_invocation import DbtCloudCliInvocation
 from dagster_dbt.cloud_v2.resources import DbtCloudWorkspace
 from dagster_dbt.dagster_dbt_translator import DagsterDbtTranslator
 
-from dagster_dbt_cloud.framework.dbt_runner import DBT_CLOUD_RUN_TIMEOUT_SECONDS, dbt_cloud_assets
+from dagster_dbt_cloud.framework.dbt_runner import (
+    DBT_CLOUD_RUN_TIMEOUT_SECONDS,
+    dbt_cloud_assets,
+    log_compiled_sql,
+)
 from dagster_dbt_cloud.framework.sources import get_model_location
 from dagster_dbt_cloud.resources.snowflake import (
     SnowflakeResource,
@@ -65,6 +69,7 @@ def build_pipeline_assets(
             context=context,
         )
         yield from invocation.wait(timeout=DBT_CLOUD_RUN_TIMEOUT_SECONDS)
+        log_compiled_sql(invocation, context)
 
     @dg.asset(
         name="hygiene_mock",
@@ -134,5 +139,6 @@ def build_pipeline_assets(
             context=context,
         )
         yield from invocation.wait(timeout=DBT_CLOUD_RUN_TIMEOUT_SECONDS)
+        log_compiled_sql(invocation, context)
 
     return partition_series1, hygiene_mock, partition_final

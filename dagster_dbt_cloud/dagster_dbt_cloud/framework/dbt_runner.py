@@ -17,6 +17,7 @@ from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
 import dagster as dg
+import requests
 from dagster import (
     AssetsDefinition,
     BackfillPolicy,
@@ -42,6 +43,36 @@ from dagster_dbt.cloud_v2.resources import DbtCloudWorkspace
 from dagster_dbt.dagster_dbt_translator import DagsterDbtTranslator
 
 DBT_CLOUD_RUN_TIMEOUT_SECONDS = 1800
+
+
+def log_compiled_sql(
+    invocation: "DbtCloudCliInvocation",
+    context: dg.AssetExecutionContext,
+) -> None:
+    """Fetch compiled SQL from dbt Cloud run artifacts and write to Dagster logs."""
+    run_id = invocation.run_handler.run_id
+    client = invocation.client
+    try:
+        artifacts = client.list_run_artifacts(run_id)
+        sql_paths = [a for a in artifacts if a.endswith(".sql") and a.startswith("compiled/")]
+        if not sql_paths:
+            context.log.warning(f"No compiled SQL artifacts found for run {run_id}.")
+            return
+        headers = {
+            "Authorization": f"Token {client.token}",
+            "Content-Type": "application/json",
+        }
+        base = f"{client.access_url}/api/v2/accounts/{client.account_id}"
+        for path in sql_paths:
+            resp = requests.get(
+                f"{base}/runs/{run_id}/artifacts/{path}",
+                headers=headers,
+                timeout=30,
+            )
+            resp.raise_for_status()
+            context.log.info(f"Compiled SQL [{path}]:\n\n{resp.text}")
+    except Exception as exc:
+        context.log.warning(f"Could not fetch compiled SQL for run {run_id}: {exc}")
 
 
 def dbt_cloud_assets(
