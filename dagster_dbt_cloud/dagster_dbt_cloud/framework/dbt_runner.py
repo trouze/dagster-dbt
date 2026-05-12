@@ -1,12 +1,19 @@
-"""Drop-in replacement for dagster_dbt.cloud_v2.dbt_cloud_assets.
+"""Drop-in replacement for dagster_dbt.cloud_v2.dbt_cloud_assets, plus
+build_dbt_chain_assets for per-model isolated dbt Cloud runs.
 
 Fetches the dbt Cloud manifest once per workspace instance via
 workspace.get_or_fetch_workspace_data() (cached on the workspace object), then
 applies dbt node selection locally using build_dbt_specs — so N decorators
 sharing the same workspace trigger exactly one parse job instead of N.
+
+build_dbt_chain_assets returns one AssetsDefinition per dbt model in a named
+group. Each is its own op: independent retry boundaries, one
+DbtCloudCliInvocation.run() per model-partition, and pool routing via
+hash((partition_key, unique_id)).
 """
 
-from collections.abc import Callable
+import json
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
 import dagster as dg
@@ -30,6 +37,7 @@ from dagster_dbt.asset_utils import (
     DBT_DEFAULT_SELECTOR,
     build_dbt_specs,
 )
+from dagster_dbt.cloud_v2.cli_invocation import DbtCloudCliInvocation
 from dagster_dbt.cloud_v2.resources import DbtCloudWorkspace
 from dagster_dbt.dagster_dbt_translator import DagsterDbtTranslator
 
@@ -107,3 +115,107 @@ def dbt_cloud_assets(
         )(fn)
 
     return decorator
+
+
+def build_dbt_chain_assets(
+    workspace: DbtCloudWorkspace,
+    *,
+    group_name: str,
+    partitions_def: dg.PartitionsDefinition,
+    pool_job_ids: list[int],
+    retry_policy: dg.RetryPolicy | None = None,
+) -> Sequence[AssetsDefinition]:
+    """Build one AssetsDefinition per dbt model in `group_name`.
+
+    Each definition is its own op — independent retry boundaries and one
+    DbtCloudCliInvocation.run() per model-partition pair. Pool routing uses
+    hash((partition_key, unique_id)) so partitions spread across jobs even when
+    multiple models run concurrently.
+    """
+    if not pool_job_ids:
+        raise ValueError("pool_job_ids must be non-empty")
+
+    translator = DagsterDbtTranslator()
+    workspace_data = workspace.get_or_fetch_workspace_data()
+    manifest = workspace_data.manifest
+    nodes = manifest.get("nodes", {})
+
+    selected_uids = [
+        uid
+        for uid, node in nodes.items()
+        if node.get("resource_type") == "model" and node.get("group") == group_name
+    ]
+
+    enriched_specs = {}
+    for uid in selected_uids:
+        raw_spec = translator.get_asset_spec(manifest, uid, None)
+        enriched_specs[uid] = raw_spec.replace_attributes(
+            kinds={"dbtcloud"} | raw_spec.kinds - {"dbt"}
+        ).merge_attributes(
+            metadata={
+                DAGSTER_DBT_CLOUD_ACCOUNT_ID_METADATA_KEY: workspace.credentials.account_id,
+                DAGSTER_DBT_CLOUD_PROJECT_ID_METADATA_KEY: workspace_data.project_id,
+                DAGSTER_DBT_CLOUD_ENVIRONMENT_ID_METADATA_KEY: workspace_data.environment_id,
+            }
+        )
+
+    return [
+        _build_one_dbt_asset(
+            spec=enriched_specs[uid],
+            node=nodes[uid],
+            unique_id=uid,
+            partitions_def=partitions_def,
+            pool_job_ids=pool_job_ids,
+            translator=translator,
+            retry_policy=retry_policy,
+        )
+        for uid in selected_uids
+    ]
+
+
+def _build_one_dbt_asset(
+    *,
+    spec: dg.AssetSpec,
+    node: Mapping[str, Any],
+    unique_id: str,
+    partitions_def: dg.PartitionsDefinition,
+    pool_job_ids: list[int],
+    translator: DagsterDbtTranslator,
+    retry_policy: dg.RetryPolicy | None,
+) -> AssetsDefinition:
+    fqn = ".".join(node["fqn"])
+    op_name = node["name"]
+
+    @dg.multi_asset(
+        name=op_name,
+        specs=[spec],
+        partitions_def=partitions_def,
+        retry_policy=retry_policy,
+    )
+    def _dbt_model_asset(
+        context: dg.AssetExecutionContext,
+        dbt_cloud_workspace: DbtCloudWorkspace,
+    ):
+        partition_key = context.partition_key
+        chosen_job_id = pool_job_ids[
+            hash((partition_key, unique_id)) % len(pool_job_ids)
+        ]
+        context.log.info(
+            f"dbt Cloud job {chosen_job_id} :: {fqn} (partition '{partition_key}')"
+        )
+        ws_data = dbt_cloud_workspace.get_or_fetch_workspace_data()
+        invocation = DbtCloudCliInvocation.run(
+            job_id=chosen_job_id,
+            args=[
+                "build",
+                "--select", fqn,
+                "--vars", json.dumps({"partition_id": partition_key}),
+            ],
+            client=dbt_cloud_workspace.get_client(),
+            manifest=ws_data.manifest,
+            dagster_dbt_translator=translator,
+            context=context,
+        )
+        yield from invocation.wait(timeout=DBT_CLOUD_RUN_TIMEOUT_SECONDS)
+
+    return _dbt_model_asset
