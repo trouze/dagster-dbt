@@ -8,8 +8,9 @@ sharing the same workspace trigger exactly one parse job instead of N.
 
 build_dbt_chain_assets returns one AssetsDefinition per dbt model matched by a
 dbt node selection string (e.g. "+file_orders_refined", "tag:nightly"). Each
-is its own op: independent retry boundaries, one DbtCloudCliInvocation.run()
-per model-partition, and pool routing via hash((partition_key, unique_id)).
+is its own op with independent retry boundaries and one
+DbtCloudCliInvocation.run() per model-partition. Every invocation targets the
+same dbt Cloud CI job (CI jobs allow concurrent runs of the same job).
 """
 
 import json
@@ -42,6 +43,8 @@ from dagster_dbt.asset_utils import (
 from dagster_dbt.cloud_v2.cli_invocation import DbtCloudCliInvocation
 from dagster_dbt.cloud_v2.resources import DbtCloudWorkspace
 from dagster_dbt.dagster_dbt_translator import DagsterDbtTranslator
+
+from dagster_dbt_cloud.resources.dbt import JOB_ID
 
 DBT_CLOUD_RUN_TIMEOUT_SECONDS = 1800
 
@@ -163,7 +166,6 @@ def build_dbt_chain_assets(
     exclude: str = DBT_DEFAULT_EXCLUDE,
     selector: str = DBT_DEFAULT_SELECTOR,
     partitions_def: dg.PartitionsDefinition,
-    pool_job_ids: list[int],
     dagster_dbt_translator: DagsterDbtTranslator | None = None,
     retry_policy: dg.RetryPolicy | None = None,
     deps: Any | None = None,
@@ -173,12 +175,8 @@ def build_dbt_chain_assets(
     Accepts any dbt node selection syntax (e.g. "+file_orders_refined",
     "tag:nightly", "group:orders"). Each definition is its own op —
     independent retry boundaries and one DbtCloudCliInvocation.run() per
-    model-partition pair. Pool routing uses hash((partition_key, unique_id))
-    so partitions spread across jobs even when multiple models run concurrently.
+    model-partition pair against the shared dbt Cloud CI job.
     """
-    if not pool_job_ids:
-        raise ValueError("pool_job_ids must be non-empty")
-
     translator = dagster_dbt_translator or DagsterDbtTranslator()
     workspace_data = workspace.get_or_fetch_workspace_data()
     manifest = workspace_data.manifest
@@ -224,7 +222,6 @@ def build_dbt_chain_assets(
                 node=node,
                 unique_id=unique_id,
                 partitions_def=partitions_def,
-                pool_job_ids=pool_job_ids,
                 translator=translator,
                 retry_policy=retry_policy,
             )
@@ -240,7 +237,6 @@ def _build_one_dbt_asset(
     node: Mapping[str, Any],
     unique_id: str,
     partitions_def: dg.PartitionsDefinition,
-    pool_job_ids: list[int],
     translator: DagsterDbtTranslator,
     retry_policy: dg.RetryPolicy | None,
 ) -> AssetsDefinition:
@@ -266,15 +262,12 @@ def _build_one_dbt_asset(
         dbt_cloud_workspace: DbtCloudWorkspace,
     ):
         partition_key = context.partition_key
-        chosen_job_id = pool_job_ids[
-            hash((partition_key, unique_id)) % len(pool_job_ids)
-        ]
         context.log.info(
-            f"dbt Cloud job {chosen_job_id} :: {fqn} (partition '{partition_key}')"
+            f"dbt Cloud CI job {JOB_ID} :: {fqn} (partition '{partition_key}')"
         )
         ws_data = dbt_cloud_workspace.get_or_fetch_workspace_data()
         invocation = DbtCloudCliInvocation.run(
-            job_id=chosen_job_id,
+            job_id=JOB_ID,
             args=[
                 "build",
                 "--select",

@@ -1,14 +1,13 @@
 """Assets for the partition_demo pipeline.
 
-  chain1              one isolated dbt job per model in "+file_orders_refined hygiene_results"
+  chain1              one isolated dbt run per model in "+file_orders_refined hygiene_results"
       ↓  (deps derived from chain1 asset keys)
   hygiene_mock        Python: query refined → mock API → insert hygiene_results
       ↓  (cascade sensor, cross-job)
   partition_final     dbt build name_address
 
-chain1 routes each model-partition to a pool job via hash((partition_key, unique_id)).
-Source data tests run per-model — dbt build selects the individual model fqn so
-its upstream source tests are included.
+Every dbt run targets the shared dbt Cloud job. Source data tests run per-model — dbt build selects the
+individual model fqn so its upstream source tests are included.
 """
 
 from collections.abc import Sequence
@@ -31,19 +30,16 @@ from .partitions import file_partitions
 
 def build_pipeline_assets(
     workspace: DbtCloudWorkspace,
-    pool_job_ids: list[int],
 ) -> Sequence[dg.AssetsDefinition]:
-    """Build all pipeline assets, capturing pool_job_ids in closure.
+    """Build all pipeline assets.
 
     Returns a flat list: one AssetsDefinition per model in chain1, plus
-    hygiene_mock and partition_final. Call once from build_pipeline_defs
-    after pool IDs are resolved.
+    hygiene_mock and partition_final.
     """
     chain1_assets = build_dbt_chain_assets(
         workspace,
         select="+file_orders_refined hygiene_results",
         partitions_def=file_partitions,
-        pool_job_ids=pool_job_ids,
     )
 
     chain1_keys = [key for asset in chain1_assets for key in asset.keys]
@@ -65,7 +61,9 @@ def build_pipeline_assets(
     ) -> dg.MaterializeResult:
         partition_id = context.partition_key
 
-        db, schema, identifier = get_model_location(dbt_cloud_workspace, "file_orders_refined")
+        db, schema, identifier = get_model_location(
+            dbt_cloud_workspace, "file_orders_refined"
+        )
         pending = snowflake.execute(
             f"SELECT order_id, customer_id FROM {db}.{schema}.{identifier} WHERE file_id = %s",
             (partition_id,),
@@ -77,8 +75,12 @@ def build_pipeline_assets(
         deduped = dedupe_pending_rows(pending)
         results = simulate_hygiene_api(deduped)
 
-        hr_db, hr_schema, hr_id = get_model_location(dbt_cloud_workspace, "hygiene_results")
-        snowflake.insert_hygiene_results(results, target_relation=f"{hr_db}.{hr_schema}.{hr_id}")
+        hr_db, hr_schema, hr_id = get_model_location(
+            dbt_cloud_workspace, "hygiene_results"
+        )
+        snowflake.insert_hygiene_results(
+            results, target_relation=f"{hr_db}.{hr_schema}.{hr_id}"
+        )
         context.log.info(f"Inserted {len(results)} hygiene results.")
 
         return dg.MaterializeResult(
@@ -94,7 +96,6 @@ def build_pipeline_assets(
         workspace,
         select="name_address",
         partitions_def=file_partitions,
-        pool_job_ids=pool_job_ids,
         deps=[hygiene_mock],
     )
 
