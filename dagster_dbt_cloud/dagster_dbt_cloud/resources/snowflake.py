@@ -27,7 +27,7 @@ class SnowflakeResource(dg.ConfigurableResource):
             user=self.user,
             warehouse=self.warehouse,
             database=self.database,
-            role=self.role or os.getenv("SNOWFLAKE_ROLE") or os.getenv("ROLE"),
+            role=self.role,
         )
         if self.private_key_path:
             connect_kwargs["private_key_file"] = self.private_key_path
@@ -123,5 +123,5 @@ def build_snowflake_resource() -> SnowflakeResource:
         private_key_path=os.environ.get("SNOWFLAKE_KEY_PATH"),
         private_key_passphrase=os.environ.get("SNOWFLAKE_PASSPHRASE"),
         password=os.environ.get("SNOWFLAKE_PASSWORD"),
-        role=os.environ.get("ROLE"),
+        role=os.environ.get("SNOWFLAKE_ROLE"),
     )

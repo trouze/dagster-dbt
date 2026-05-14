@@ -4,22 +4,22 @@ sa_snowflake:
     dev:
       type: snowflake
       threads: 16
-      account: "{{ env_var('ACCOUNT', '') }}"
-      user: "{{ env_var('USER', '') }}"
-      database: "{{ env_var('DATABASE', '') }}"
-      warehouse: "{{ env_var('WAREHOUSE', '') }}"
-      schema: "{{ env_var('SCHEMA', 'dev') }}"
-      role: transformer
-      private_key_path: "{{ env_var('KEY_PATH', '') }}"
-      private_key_passphrase: "{{ env_var('PASSPHRASE', '') }}"
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT', '') }}"
+      user: "{{ env_var('SNOWFLAKE_USER', '') }}"
+      database: "{{ env_var('SNOWFLAKE_DATABASE', '') }}"
+      warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE', '') }}"
+      schema: "{{ env_var('SNOWFLAKE_SCHEMA', 'dev') }}"
+      role: "{{ env_var('SNOWFLAKE_ROLE', '') }}"
+      private_key_path: "{{ env_var('SNOWFLAKE_KEY_PATH', '') }}"
+      private_key_passphrase: "{{ env_var('SNOWFLAKE_PASSPHRASE', '') }}"
     ci:
       type: snowflake
       threads: 16
-      account: "{{ env_var('ACCOUNT', '') }}"
-      user: "{{ env_var('USER', '') }}"
-      database: "{{ env_var('DATABASE') }}"
-      warehouse: "{{ env_var('WAREHOUSE', '') }}"
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT', '') }}"
+      user: "{{ env_var('SNOWFLAKE_USER', '') }}"
+      database: "{{ env_var('SNOWFLAKE_DATABASE') }}"
+      warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE', '') }}"
       schema: dbt_cloud_pr_1234_1
-      role: transformer
-      private_key_path: "{{ env_var('KEY_PATH', '') }}"
-      private_key_passphrase: "{{ env_var('PASSPHRASE', '') }}"
+      role: "{{ env_var('SNOWFLAKE_ROLE', '') }}"
+      private_key_path: "{{ env_var('SNOWFLAKE_KEY_PATH', '') }}"
+      private_key_passphrase: "{{ env_var('SNOWFLAKE_PASSPHRASE', '') }}"
