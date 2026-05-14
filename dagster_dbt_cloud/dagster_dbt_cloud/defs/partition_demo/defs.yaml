@@ -1,0 +1,51 @@
+# Multi-stage partition_demo pipeline.
+#
+# Two IsolatedDbtCloudPipeline instances against the same dbt Cloud workspace.
+# Chain 1 owns the parse-job refresh lifecycle (`github_repo` set) and emits
+# the git-watch sensor; chain 2 is downstream and shares the cached manifest
+# via the framework's defs-state key.
+#
+# Note: YAML anchors don't cross `---` document boundaries, so the workspace
+# block and shared values are repeated below.
+
+type: dagster_dbt_cloud.components.IsolatedDbtCloudPipeline
+
+attributes:
+  workspace:
+    account_id: "{{ env.DBT_CLOUD_ACCOUNT_ID }}"
+    token: "{{ env.DBT_API_KEY }}"
+    project_id: "{{ env.DBT_CLOUD_PROJECT_ID }}"
+    environment_id: "{{ env.DBT_CLOUD_ENVIRONMENT_ID }}"
+    access_url: "{{ env.DBT_BASE_URL }}"
+  git_branch: "{{ env.DBT_CLOUD_GIT_BRANCH }}"
+  github_repo: trouze/acxiom
+  select: "+file_orders_refined hygiene_results"
+  partition_keys: ["001", "002", "003"]
+  preflight: dagster_dbt_cloud.defs.partition_demo.preflight_checks.run_preflight
+  # Disable dev auto-refresh — the git-watch sensor is the single trigger now.
+  defs_state:
+    management_type: LOCAL_FILESYSTEM
+    refresh_if_dev: false
+
+---
+
+type: dagster_dbt_cloud.components.IsolatedDbtCloudPipeline
+
+attributes:
+  workspace:
+    account_id: "{{ env.DBT_CLOUD_ACCOUNT_ID }}"
+    token: "{{ env.DBT_API_KEY }}"
+    project_id: "{{ env.DBT_CLOUD_PROJECT_ID }}"
+    environment_id: "{{ env.DBT_CLOUD_ENVIRONMENT_ID }}"
+    access_url: "{{ env.DBT_BASE_URL }}"
+  git_branch: "{{ env.DBT_CLOUD_GIT_BRANCH }}"
+  select: "name_address"
+  partition_keys: ["001", "002", "003"]
+  deps:
+    - hygiene_mock
+  # Sensor already created by chain 1's component instance — disable here so we
+  # don't get one polling sensor per stage.
+  create_sensor: false
+  defs_state:
+    management_type: LOCAL_FILESYSTEM
+    refresh_if_dev: false

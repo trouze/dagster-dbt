@@ -1,25 +1,27 @@
 """Top-level Dagster definitions.
 
-Merges shared infrastructure (resources, dbt Cloud polling sensor) with
-per-pipeline Definitions. To add a new pipeline, import its
-build_pipeline_defs and merge it here.
+Auto-loads every component / Python defs file under `dagster_dbt_cloud.defs`,
+then layers in the shared resources used by the Python steps.
+
+To add a new pipeline, create a new folder under `defs/` with one or more
+`defs.yaml` files (for dbt stages) and any `.py` files for Python steps. No
+edits to this file required.
 """
 
 import dagster as dg
 
-from dagster_dbt_cloud.resources.dbt import dbt_cloud_polling_sensor, workspace
+import dagster_dbt_cloud.defs as defs_module
+from dagster_dbt_cloud.resources.github import build_github_resource
 from dagster_dbt_cloud.resources.snowflake import build_snowflake_resource
-from dagster_dbt_cloud.pipelines.partition_demo.defs import (
-    build_pipeline_defs as partition_demo_defs,
-)
+from dagster_dbt_cloud.resources.workspace import build_workspace
 
 defs = dg.Definitions.merge(
+    dg.load_defs(defs_root=defs_module),
     dg.Definitions(
         resources={
-            "dbt_cloud_workspace": workspace,
+            "dbt_cloud_workspace": build_workspace(),
             "snowflake": build_snowflake_resource(),
+            "github": build_github_resource(),
         },
-        sensors=[dbt_cloud_polling_sensor],
     ),
-    partition_demo_defs(workspace),
 )

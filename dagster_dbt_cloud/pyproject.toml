@@ -15,3 +15,9 @@ dependencies = [
 
 [tool.dagster]
 module_name = "dagster_dbt_cloud.definitions"
+
+[tool.dg]
+directory_type = "project"
+
+[tool.dg.project]
+root_module = "dagster_dbt_cloud"

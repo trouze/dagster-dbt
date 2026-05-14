@@ -446,8 +446,8 @@ wheels = [
 
 [[package]]
 name = "dagster"
-version = "1!0+dev"
-source = { editable = "../../../dagster/python_modules/dagster" }
+version = "1.13.4"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "alembic" },
     { name = "antlr4-python3-runtime" },
@@ -478,116 +478,15 @@ dependencies = [
     { name = "universal-pathlib" },
     { name = "watchdog" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "alembic", specifier = ">=1.2.1,!=1.6.3,!=1.7.0,!=1.11.0" },
-    { name = "antlr4-python3-runtime" },
-    { name = "boto3-stubs", extras = ["essential"], marker = "extra == 'ty'" },
-    { name = "click", specifier = ">=5.0,<9.0" },
-    { name = "coloredlogs", specifier = ">=6.1,<=14.0" },
-    { name = "dagster-pipes", specifier = "==1!0+dev" },
-    { name = "dagster-shared", specifier = "==1!0+dev" },
-    { name = "docker", marker = "extra == 'docker'" },
-    { name = "docker", marker = "extra == 'test'" },
-    { name = "docstring-parser" },
-    { name = "duckdb", marker = "extra == 'test-components'" },
-    { name = "filelock" },
-    { name = "fsspec", marker = "extra == 'test'", specifier = "<2024.5.0" },
-    { name = "grpcio", marker = "python_full_version < '3.13'", specifier = ">=1.44.0" },
-    { name = "grpcio", marker = "python_full_version >= '3.13'", specifier = ">=1.66.2" },
-    { name = "grpcio-health-checking", marker = "python_full_version < '3.13'", specifier = ">=1.44.0" },
-    { name = "grpcio-health-checking", marker = "python_full_version >= '3.13'", specifier = ">=1.66.2" },
-    { name = "grpcio-tools", marker = "python_full_version >= '3.13' and extra == 'test'", specifier = ">=1.66.2" },
-    { name = "grpcio-tools", marker = "python_full_version < '3.13' and extra == 'test'", specifier = ">=1.44.0" },
-    { name = "jinja2" },
-    { name = "jsonschema", marker = "extra == 'test-components'" },
-    { name = "morefs", extras = ["asynclocal"], marker = "extra == 'test'" },
-    { name = "mypy", marker = "extra == 'mypy'", specifier = "==1.8.0" },
-    { name = "mypy-protobuf", marker = "extra == 'test'" },
-    { name = "objgraph", marker = "extra == 'test'" },
-    { name = "pandas", marker = "extra == 'test-components'", specifier = "<3.0.0" },
-    { name = "pandas-stubs", marker = "extra == 'pyright'" },
-    { name = "pandas-stubs", marker = "extra == 'ty'" },
-    { name = "protobuf", marker = "python_full_version < '3.11'", specifier = ">=3.20.0,<7" },
-    { name = "protobuf", marker = "python_full_version >= '3.11'", specifier = ">=4,<7" },
-    { name = "psutil", marker = "sys_platform == 'win32'", specifier = ">=1.0" },
-    { name = "psutil", marker = "extra == 'test'" },
-    { name = "pyright", marker = "extra == 'pyright'", specifier = "==1.1.389" },
-    { name = "pytest", marker = "extra == 'test'", specifier = ">=8" },
-    { name = "pytest-asyncio", marker = "extra == 'test'" },
-    { name = "pytest-cov", marker = "extra == 'test'", specifier = "==5.0.0" },
-    { name = "pytest-mock", marker = "extra == 'test'", specifier = "==3.14.0" },
-    { name = "pytest-rerunfailures", marker = "extra == 'test'" },
-    { name = "pytest-timeout", marker = "extra == 'test'" },
-    { name = "pytest-xdist", marker = "extra == 'test'", specifier = "==3.6.1" },
-    { name = "python-dotenv" },
-    { name = "pytz" },
-    { name = "pywin32", marker = "sys_platform == 'win32'", specifier = "!=226" },
-    { name = "rapidfuzz", marker = "extra == 'test'" },
-    { name = "requests" },
-    { name = "responses", marker = "extra == 'test'", specifier = "<=0.23.1" },
-    { name = "rich" },
-    { name = "ruff", marker = "extra == 'ruff'", specifier = "==0.15.0" },
-    { name = "ruff", marker = "extra == 'test'", specifier = "==0.15.0" },
-    { name = "six" },
-    { name = "sqlalchemy", specifier = ">=1.0,<3" },
-    { name = "structlog" },
-    { name = "syrupy", marker = "extra == 'test'", specifier = ">=4.0.0" },
-    { name = "tabulate" },
-    { name = "tomli", specifier = "<3" },
-    { name = "tomlkit", marker = "extra == 'test-components'" },
-    { name = "toposort", specifier = ">=1.0" },
-    { name = "tox", marker = "extra == 'test'", specifier = ">=4" },
-    { name = "tox-uv", marker = "extra == 'test'", specifier = ">=1" },
-    { name = "tqdm", specifier = "<5" },
-    { name = "ty", marker = "extra == 'ty'", specifier = "==0.0.35" },
-    { name = "types-backports", marker = "extra == 'pyright'" },
-    { name = "types-backports", marker = "extra == 'ty'" },
-    { name = "types-certifi", marker = "extra == 'pyright'" },
-    { name = "types-certifi", marker = "extra == 'ty'" },
-    { name = "types-chardet", marker = "extra == 'pyright'" },
-    { name = "types-chardet", marker = "extra == 'ty'" },
-    { name = "types-cryptography", marker = "extra == 'pyright'" },
-    { name = "types-cryptography", marker = "extra == 'ty'" },
-    { name = "types-freezegun", marker = "extra == 'ty'" },
-    { name = "types-mock", marker = "extra == 'pyright'" },
-    { name = "types-mock", marker = "extra == 'ty'" },
-    { name = "types-paramiko", marker = "extra == 'pyright'" },
-    { name = "types-paramiko", marker = "extra == 'ty'" },
-    { name = "types-protobuf", marker = "extra == 'ty'" },
-    { name = "types-pyopenssl", marker = "extra == 'pyright'" },
-    { name = "types-pyopenssl", marker = "extra == 'ty'" },
-    { name = "types-python-dateutil", marker = "extra == 'pyright'", specifier = "~=2.9.0.20240316" },
-    { name = "types-python-dateutil", marker = "extra == 'ty'", specifier = "~=2.9.0.20240316" },
-    { name = "types-pytz", marker = "extra == 'pyright'" },
-    { name = "types-pytz", marker = "extra == 'ty'" },
-    { name = "types-pyyaml", marker = "extra == 'pyright'" },
-    { name = "types-pyyaml", marker = "extra == 'ty'" },
-    { name = "types-redis", marker = "extra == 'ty'" },
-    { name = "types-requests", marker = "extra == 'pyright'" },
-    { name = "types-requests", marker = "extra == 'ty'" },
-    { name = "types-simplejson", marker = "extra == 'pyright'" },
-    { name = "types-simplejson", marker = "extra == 'ty'" },
-    { name = "types-six", marker = "extra == 'pyright'" },
-    { name = "types-six", marker = "extra == 'ty'" },
-    { name = "types-tabulate", marker = "extra == 'pyright'" },
-    { name = "types-tabulate", marker = "extra == 'ty'" },
-    { name = "types-toml", marker = "extra == 'pyright'" },
-    { name = "types-toml", marker = "extra == 'ty'" },
-    { name = "types-tzlocal", marker = "extra == 'pyright'" },
-    { name = "types-tzlocal", marker = "extra == 'ty'" },
-    { name = "tzdata" },
-    { name = "universal-pathlib", marker = "python_full_version < '3.12'" },
-    { name = "universal-pathlib", marker = "python_full_version >= '3.12'", specifier = ">=0.2.0" },
-    { name = "watchdog", specifier = ">=0.8.3,<7" },
+sdist = { url = "https://files.pythonhosted.org/packages/99/2e/670cc41b9d669945d047a55b3c92cb267a31b802916e7492adac1ea19867/dagster-1.13.4.tar.gz", hash = "sha256:7214234c4cf257a276e01b662e770bc69ab5baeff2755487b2f494d9f1c0b532", size = 3182670, upload-time = "2026-05-07T19:39:48.083Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/9f/8d/8ba990322bfd67feaea078a77a78f5caf8a41fc0a1a08fa0fabcbf69f7ae/dagster-1.13.4-py3-none-any.whl", hash = "sha256:e73de091da1f1785bf541f1b7dda7faeb76db6c7f5a739c96b7b332d7091b2cd", size = 1973827, upload-time = "2026-05-07T19:39:46.321Z" },
 ]
-provides-extras = ["docker", "test", "test-components", "mypy", "pyright", "ruff", "ty"]
 
 [[package]]
 name = "dagster-dbt"
-version = "1!0+dev"
-source = { editable = "../../../dagster/python_modules/libraries/dagster-dbt" }
+version = "0.29.4"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "dagster" },
     { name = "dbt-core" },
@@ -602,35 +501,15 @@ dependencies = [
     { name = "sqlglot", extra = ["rs"] },
     { name = "typer" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "dagster", specifier = "==1!0+dev" },
-    { name = "dagster-duckdb", marker = "extra == 'test'" },
-    { name = "dagster-duckdb-pandas", marker = "extra == 'test'" },
-    { name = "dbt-core", specifier = ">=1.7,<1.12" },
-    { name = "dbt-duckdb", marker = "extra == 'test'", specifier = "<1.9.2" },
-    { name = "duckdb", marker = "extra == 'test'", specifier = "<1.4.0" },
-    { name = "gitpython" },
-    { name = "jinja2" },
-    { name = "networkx" },
-    { name = "orjson" },
-    { name = "packaging" },
-    { name = "pytest-order", marker = "extra == 'test'" },
-    { name = "pytest-order", marker = "extra == 'test-bare'" },
-    { name = "pytest-rerunfailures", marker = "extra == 'test'" },
-    { name = "pytest-rerunfailures", marker = "extra == 'test-bare'" },
-    { name = "requests" },
-    { name = "rich" },
-    { name = "sqlglot", extras = ["rs"], specifier = "<28.1.0" },
-    { name = "typer", specifier = ">=0.9.0" },
+sdist = { url = "https://files.pythonhosted.org/packages/ef/6c/126c7802cce36ee5d83ba06f1ef0d2bdfb53ea09c955a4ea7ab93a6f891c/dagster_dbt-0.29.4.tar.gz", hash = "sha256:bbbf02701d2bf4ee5a88c5c9be575bff9d7f43bc59d840c4aa493a106132ee22", size = 421264, upload-time = "2026-05-07T19:47:37.766Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/02/ee/72464cd7ded7e6d12a2213d9df952f85a4fa4944754e7ebed8b11b48d352/dagster_dbt-0.29.4-py3-none-any.whl", hash = "sha256:21cf5762b2b042bb06d0bbfa09dcfc066074a7f75c01f83a12f2b6dc25c19381", size = 126734, upload-time = "2026-05-07T19:47:36.284Z" },
 ]
-provides-extras = ["test-bare", "test"]
 
 [[package]]
 name = "dagster-graphql"
-version = "1!0+dev"
-source = { editable = "../../../dagster/python_modules/dagster-graphql" }
+version = "1.13.4"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "dagster" },
     { name = "gql", extra = ["requests"] },
@@ -638,14 +517,9 @@ dependencies = [
     { name = "requests" },
     { name = "starlette" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "dagster", specifier = "==1!0+dev" },
-    { name = "gql", extras = ["requests"], specifier = ">=3,<5" },
-    { name = "graphene", specifier = ">=3,<4" },
-    { name = "requests" },
-    { name = "starlette" },
+sdist = { url = "https://files.pythonhosted.org/packages/ab/96/d39ba106d1d4f0ba317735e41f011c2028444b365429843aa9eb6c7beb17/dagster_graphql-1.13.4.tar.gz", hash = "sha256:ef8d0d592c3c866222f7bedff0212fd518bda05f815b34aee2bf82009ea3276d", size = 472486, upload-time = "2026-05-07T19:40:15.071Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5d/82/183fae16ccdfb46af0c2e929cc688bfee30f48a602c8c461f2f8a08c5137/dagster_graphql-1.13.4-py3-none-any.whl", hash = "sha256:563e757c3d4c67513f193090ab960074fe0c94c5ba200887ad20f742e76401b9", size = 216448, upload-time = "2026-05-07T19:40:12.863Z" },
 ]
 
 [[package]]
@@ -663,38 +537,31 @@ dependencies = [
     { name = "snowflake-connector-python" },
 ]
 
-[package.optional-dependencies]
-dev = [
-    { name = "dagster-webserver" },
-]
-
 [package.metadata]
 requires-dist = [
-    { name = "dagster", editable = "../../../dagster/python_modules/dagster" },
-    { name = "dagster-dbt", editable = "../../../dagster/python_modules/libraries/dagster-dbt" },
-    { name = "dagster-graphql", editable = "../../../dagster/python_modules/dagster-graphql" },
-    { name = "dagster-pipes", editable = "../../../dagster/python_modules/dagster-pipes" },
-    { name = "dagster-shared", editable = "../../../dagster/python_modules/libraries/dagster-shared" },
-    { name = "dagster-webserver", editable = "../../../dagster/python_modules/dagster-webserver" },
-    { name = "dagster-webserver", marker = "extra == 'dev'", editable = "../../../dagster/python_modules/dagster-webserver" },
+    { name = "dagster" },
+    { name = "dagster-dbt" },
+    { name = "dagster-graphql" },
+    { name = "dagster-pipes" },
+    { name = "dagster-shared" },
+    { name = "dagster-webserver" },
     { name = "httpx" },
     { name = "snowflake-connector-python" },
 ]
-provides-extras = ["dev"]
 
 [[package]]
 name = "dagster-pipes"
-version = "1!0+dev"
-source = { editable = "../../../dagster/python_modules/dagster-pipes" }
-
-[package.metadata]
-requires-dist = [{ name = "google-cloud-storage", marker = "extra == 'stubs'" }]
-provides-extras = ["stubs"]
+version = "1.13.4"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/24/e6/416731168e48376c66d7029522074ce2911e7584fb3dc6cda9f7c834dddf/dagster_pipes-1.13.4.tar.gz", hash = "sha256:a9b9965e1eff5dc13dd6797628ae38d56143eed6174de4b7de0f5b54deb596fa", size = 23180, upload-time = "2026-05-07T19:40:04.815Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/62/dd/14af67872a9c79cd190a60e705d3e3954d131f1c01b0a574e237daf470ee/dagster_pipes-1.13.4-py3-none-any.whl", hash = "sha256:1270ca288f3e0379e60ede9a87fff3a0ac25c9757386d84bdda67444925d3627", size = 20306, upload-time = "2026-05-07T19:40:03.767Z" },
+]
 
 [[package]]
 name = "dagster-shared"
-version = "1!0+dev"
-source = { editable = "../../../dagster/python_modules/libraries/dagster-shared" }
+version = "1.13.4"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "packaging" },
     { name = "platformdirs" },
@@ -703,24 +570,15 @@ dependencies = [
     { name = "tomlkit" },
     { name = "typing-extensions" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "packaging", specifier = ">=20.9" },
-    { name = "platformdirs" },
-    { name = "pydantic", specifier = ">=2,<3.0.0" },
-    { name = "pytest", marker = "extra == 'test'" },
-    { name = "pytest-rerunfailures", marker = "extra == 'test'" },
-    { name = "pyyaml", specifier = ">=5.1" },
-    { name = "tomlkit" },
-    { name = "typing-extensions", specifier = ">=4.11.0,<5" },
+sdist = { url = "https://files.pythonhosted.org/packages/04/eb/61a5841e5cced34fe247988f5276cd92ce87f80d4370c87eb046e29378e8/dagster_shared-1.13.4.tar.gz", hash = "sha256:4116acb5a78aac852027e43ebad914471e98304fead7992f04c3baec39fa0d2d", size = 95734, upload-time = "2026-05-07T19:50:17.348Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a7/c9/7acc34363b2d40a99167a09a468c923595c9bc1cf4775f33006a61b6a32a/dagster_shared-1.13.4-py3-none-any.whl", hash = "sha256:1e1ba3e3b5e527da0f86e7b867aa576ff87f80ae9badd56062812da9c13ab2a9", size = 94944, upload-time = "2026-05-07T19:50:15.98Z" },
 ]
-provides-extras = ["test"]
 
 [[package]]
 name = "dagster-webserver"
-version = "1!0+dev"
-source = { editable = "../../../dagster/python_modules/dagster-webserver" }
+version = "1.13.4"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "click" },
     { name = "dagster" },
@@ -728,18 +586,10 @@ dependencies = [
     { name = "starlette" },
     { name = "uvicorn", extra = ["standard"] },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "click", specifier = ">=7.0,<9.0" },
-    { name = "dagster", specifier = "==1!0+dev" },
-    { name = "dagster-graphql", specifier = "==1!0+dev" },
-    { name = "nbconvert", marker = "extra == 'notebook'" },
-    { name = "starlette", specifier = "!=0.36.0" },
-    { name = "starlette", extras = ["full"], marker = "extra == 'test'" },
-    { name = "uvicorn", extras = ["standard"] },
+sdist = { url = "https://files.pythonhosted.org/packages/41/b2/9d7f93c3f9a712d35910c0c31da1071b8d2098adb97e89c547430374d077/dagster_webserver-1.13.4.tar.gz", hash = "sha256:29da6bf1ce8893d3f53eda2be0edfe8eb0e6ec5cc44139f2df78f0cb3e825331", size = 11750572, upload-time = "2026-05-07T19:45:30.096Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/98/00/84129c3b76285ac3b753bcca286b7ab9c47be01bca4dce3733da54650370/dagster_webserver-1.13.4-py3-none-any.whl", hash = "sha256:bec02ed688c3f3c14722e6084c5e0c54c98c0c1005a0130ce7fbc9304dd93e33", size = 12099906, upload-time = "2026-05-07T19:45:27.822Z" },
 ]
-provides-extras = ["notebook", "test"]
 
 [[package]]
 name = "dbt-adapters"
