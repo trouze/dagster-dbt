@@ -2,9 +2,7 @@
 
 Each generated AssetsDefinition is its own op with its own retry boundary, so the
 Dagster UI can retry or multi-select individual models. Every model materialization
-issues a separate `DbtCloudCliInvocation.run()` against the same dbt Cloud CI job —
-CI jobs allow concurrent runs of the same job, which is the workaround for dbt
-Cloud deploy-job concurrency limits.
+issues a separate `DbtCloudCliInvocation.run()` against the same dbt Cloud CI job.
 
 Inherits from upstream `DbtCloudComponent` so the manifest is fetched once and
 cached via the state-backed component framework. All instances pointing at the
@@ -63,6 +61,7 @@ from dagster_dbt_cloud.resources.github import GitHubResource
 
 DBT_CLOUD_RUN_TIMEOUT_SECONDS = 1800
 SENSOR_DEFAULT_INTERVAL_SECONDS = 300
+DAGSTER_MANAGED_CI_JOB_NAME = "dagster-managed-ci"
 
 
 def _safe_name(s: str) -> str:
@@ -174,30 +173,44 @@ def _log_compiled_sql(
         )
 
 
-def _fetch_single_ci_job_id(workspace: DbtCloudWorkspace) -> int:
-    """Return the lone CI job id for the workspace's project+environment.
+def _get_or_create_ci_job_id(workspace: DbtCloudWorkspace) -> int:
+    """Return the Dagster-managed CI job id, creating it if it doesn't exist.
 
-    Raises if zero or multiple CI jobs exist — be explicit instead of silently
-    picking one. Customer can pin `ci_job_id` in YAML to skip this lookup.
+    Looks for a job named DAGSTER_MANAGED_CI_JOB_NAME with job_type='ci' in the
+    workspace's project+environment. Creates one on first use so the pipeline is
+    fully self-contained — no manual dbt platform setup required.
     """
-    jobs = workspace.get_client().list_jobs(
+    client = workspace.get_client()
+    jobs = client.list_jobs(
         project_id=int(workspace.project_id),
         environment_id=int(workspace.environment_id),
     )
-    ci_jobs = [job for job in jobs if job.get("job_type") == "ci"]
-    if not ci_jobs:
-        raise ValueError(
-            f"No dbt Cloud CI job found in project {workspace.project_id} / "
-            f"environment {workspace.environment_id}."
-        )
-    if len(ci_jobs) > 1:
-        names = [j.get("name") for j in ci_jobs]
-        raise ValueError(
-            f"Expected exactly one CI job in project {workspace.project_id} / "
-            f"environment {workspace.environment_id}; found {len(ci_jobs)}: "
-            f"{names}. Pin `ci_job_id` in the component YAML to disambiguate."
-        )
-    return int(ci_jobs[0]["id"])
+    existing = [
+        job for job in jobs
+        if job.get("job_type") == "ci" and job.get("name") == DAGSTER_MANAGED_CI_JOB_NAME
+    ]
+    if existing:
+        return int(existing[0]["id"])
+
+    response = client._make_request(  # noqa: SLF001
+        method="post",
+        endpoint="jobs/",
+        base_url=client.api_v2_url,
+        data={
+            "account_id": int(workspace.credentials.account_id),
+            "project_id": int(workspace.project_id),
+            "environment_id": int(workspace.environment_id),
+            "name": DAGSTER_MANAGED_CI_JOB_NAME,
+            "job_type": "ci",
+            "execute_steps": ["dbt build"],
+            "triggers": {
+                "github_webhook": False,
+                "schedule": False,
+                "custom_branch_only": False,
+            },
+        },
+    )
+    return int(response.json()["data"]["id"])
 
 
 class IsolatedDbtCloudPipeline(DbtCloudComponent):
@@ -219,7 +232,8 @@ class IsolatedDbtCloudPipeline(DbtCloudComponent):
         default=None,
         description=(
             "Optional explicit dbt Cloud CI job id. If unset, the component "
-            "looks for exactly one CI job in the workspace's project+environment."
+            "looks for a job named 'dagster-managed-ci' in the workspace's "
+            "project+environment and creates it if not found."
         ),
     )
     partition_keys: list[str] | None = Field(
@@ -263,7 +277,7 @@ class IsolatedDbtCloudPipeline(DbtCloudComponent):
     def resolved_ci_job_id(self) -> int:
         if self.ci_job_id is not None:
             return self.ci_job_id
-        return _fetch_single_ci_job_id(self.workspace)
+        return _get_or_create_ci_job_id(self.workspace)
 
     @cached_property
     def partitions_def(self) -> dg.PartitionsDefinition | None:
