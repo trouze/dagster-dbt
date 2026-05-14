@@ -2,6 +2,7 @@
 .env
 target/
 dbt_packages/
+manifest.json
 logs/
 env/
 .user.yml
