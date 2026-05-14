@@ -1,117 +1,101 @@
-# dbt-slim-ci
-This project aims to demo the dbt slim CI functionality, as well as give a forum for discussing the --defer and --state flags in dbt CLI that make slim CI possible.
+# dagster-dbt
 
-# Source and Model Freshness
-Repurposed this repository for a demo of Source and model freshness in dbt. The outline for that demo is as follows:
+A starter project for orchestrating dbt platform CI-job runs from Dagster.
 
-Out of the box functionality, to simulate for a demo:
+Each dbt model becomes a per-model Dagster asset, materialized through a single
+dbt CI job. The bundled `IsolatedDbtCloudPipeline` component handles the
+mapping, caches the dbt manifest as state-backed Dagster defs, and refreshes
+that cache automatically when the watched branch advances.
 
-### Source freshness snapshot
-```
-dbt source freshness --profiles-dir .
-```
+## What you get
 
-Copy sources.json to artifacts
-```
-cp -r ./target/* ./dev-run-artifacts
-```
+- Per-model assets in Dagster, materialized via a single dbt platform CI job
+- Partition-aware reprocessing — pass a `partition_id` and dbt rebuilds only
+  that slice
+- Python steps between dbt stages (preflight checks, mocked external API calls,
+  etc.) demonstrated in `defs/partition_demo/`
+- Auto-refresh of the dbt manifest on every new commit via a polling git
+  sensor
+- Multi-chain pipelines that share one manifest cache across stages
 
-Perform a new load job (for Roche this is AWS Glue job), we'll use dbt seed to simulate a new load of data.
-
-```
-dbt seed --profiles-dir .
-```
-
-Run a new source freshness after a load.
-```
-dbt source freshness --profiles-dir .
-```
-
-Only run models that have a fresh source
-```
-dbt run --select source_status:fresher+ --state ./dev-run-artifacts --profiles-dir .
-```
-
-## Extending freshness logic to models
-Source freshness is effectively a generic test that allows you to select downstream models that have new data when sources.json suggests data is fresher. We can extend this process to models if we wish in much the same way using a custom generic test for model freshness, and run_results.json artifact. The process is as follows:
-
-Create generic model freshness test:
-```sql
-{% test is_model_fresh(model, last_model_run_field, error_after, time_part) %}
-{{ config(store_failures = false, severity = 'error') }}
-    select
-    count(*)
-    from {{ model }}
-    having cast(max({{ last_model_run_field }}) as TIMESTAMP) < DATEADD({{ time_part }}, -cast({{ error_after }} as integer), current_timestamp())
-{% endtest %}
-```
-
-This test takes a few custom arguments, and assumes that your models have a `current_timestamp()` column that updates each time a model is ran.
-
-We can add this test to any model we create, using yaml (or other configs in dbt).
-```yaml
-models:
-  - name: my_model
-    description: ""
-    tests:
-      - is_model_fresh:
-          last_model_run_field: last_model_run
-          error_after: 1
-          time_part: minute
-```
-
-This test will fail if our model hasn't ran in over a minute, for example. `time_part` argument maps to time_part in most SQL dialects, Snowflake's options are [here](https://docs.snowflake.com/en/sql-reference/functions-date-time.html#label-supported-date-time-parts).
-
-Now, we can run our tests on models to check for freshness.
-```
-dbt test -s test_name:is_model_fresh --profiles-dir .
-```
-
-Then we'll copy the run_results.json of our tests to our artifacts directory for future reference.
+## Repo layout
 
 ```
-cp ./target/run_results.json ./dev-run-artifacts/run_results.json
+dagster_dbt_cloud/          # Dagster project (uv-managed)
+  dagster_dbt_cloud/
+    components/             # IsolatedDbtCloudPipeline component
+    defs/partition_demo/    # demo: components + Python steps + preflight
+    framework/              # shared sources helpers
+    resources/              # github, snowflake, workspace resources
+
+models/partition_demo/      # dbt models the demo runs against
+seeds/                      # sample seed data
+profiles.yml                # dbt profile (uses env vars)
+dbt_project.yml             # dbt project config
 ```
 
-Then we can run only models that are considered not fresh.
-```
-dbt run --select 1+result:fail+ --state ./dev-run-artifacts --profiles-dir .
-```
+A deeper walkthrough of the component itself lives at
+[`dagster_dbt_cloud/dagster_dbt_cloud/README.md`](dagster_dbt_cloud/dagster_dbt_cloud/README.md).
 
-This will select models that had a failing tests. This helps us keep ourselves from running fresh models over again, since tests can be much more computationally light.
+## Prerequisites
 
-# Slim CI in dbt
-commands:
-#### Setup
-```
-dbt clean
-dbt deps
-```
-#### Production run and manifest.json creation
-```
-dbt run --profiles-dir .
-#### Copy manifest.json from you production run
-mkdir dev-run-artifacts && cp ./target/manifest.json ./dev-run-artifacts/manifest.json
-```
-#### Change a model
-orders_by_customers.sql changes
+- Python 3.10+
+- [uv](https://docs.astral.sh/uv/)
+- A dbt platform account with a CI job configured
+- A Snowflake warehouse the CI job can write to (key-pair auth in the default
+  profile)
 
-#### Slim CI Run
-```
-#### State can also be an environment variable
-dbt run --select state:modified --profiles-dir . --target ci --defer --state ./dev-run-artifacts
-#### Drop temporary CI_ Schemas
-dbt run-operation remove_mr_schemas --profiles-dir .
-```
+## Quickstart
 
-#### Slim CI
-```
-dbt run -m state:modified+1 1+exposure:*,state:modified+ --profiles-dir . --target ci --defer --state ./dev-run-artifacts
-```
-- Modified model and first order children
-- Any exposure that had an upstream model changed
+1. Clone and install:
 
+   ```bash
+   git clone https://github.com/trouze/dagster-dbt.git
+   cd dagster-dbt/dagster_dbt_cloud
+   uv sync
+   ```
 
-## Resources
-- [Deferral](https://docs.getdbt.com/reference/node-selection/defer)
-- [Understanding State](https://docs.getdbt.com/guides/legacy/understanding-state)
+2. Point `dbt_project.yml` at your dbt platform project — replace the
+   placeholder `project-id` and `tenant_hostname`.
+
+3. Set environment variables. The component reads:
+
+   | Variable | Purpose |
+   | --- | --- |
+   | `DBT_CLOUD_ACCOUNT_ID` | dbt platform account |
+   | `DBT_CLOUD_PROJECT_ID` | dbt platform project |
+   | `DBT_CLOUD_ENVIRONMENT_ID` | dbt platform environment |
+   | `DBT_CLOUD_JOB_ID` | CI job the component invokes |
+   | `DBT_API_KEY` | API token |
+   | `DBT_BASE_URL` | e.g. `https://cloud.getdbt.com` |
+   | `DBT_CLOUD_GIT_BRANCH` | branch the refresh sensor watches |
+
+   Snowflake credentials (`ACCOUNT`, `USER`, `DATABASE`, `WAREHOUSE`, `SCHEMA`,
+   `KEY_PATH`, `PASSPHRASE`) are read by `profiles.yml`.
+
+4. Bootstrap the manifest cache:
+
+   ```bash
+   uv run dg utils refresh-defs-state
+   ```
+
+5. Run Dagster locally:
+
+   ```bash
+   uv run dg dev
+   ```
+
+## Adapting for your own pipelines
+
+- Drop new `defs.yaml` files under `dagster_dbt_cloud/defs/<your_pipeline>/`
+  with one or more `IsolatedDbtCloudPipeline` instances. The top-level
+  `definitions.py` auto-loads everything under `defs/`.
+- Only one component per dbt workspace should own the refresh — set
+  `github_repo` on that one chain. Downstream chains share the cached manifest
+  via the framework's defs-state key.
+- Custom Python steps live as plain `.py` files in the same folder and are
+  loaded by `dg.load_defs`.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
