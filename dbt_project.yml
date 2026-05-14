@@ -5,10 +5,10 @@ name: "t_jaffle_shop"
 version: "1.0.0"
 config-version: 2
 
-# Set dbt Cloud Info
+# Set dbt Cloud Info — replace both values with your own before running.
 dbt-cloud:
-  project-id: 489484
-  tenant_hostname: tk626.us1.dbt.com # Replace with your Tenant URL
+  project-id: 0 # Replace with your dbt Cloud project ID
+  tenant_hostname: cloud.getdbt.com # Replace with your dbt Cloud tenant hostname
 # This setting configures which "profile" dbt uses for this project.
 profile: "sa_snowflake"
 
@@ -41,12 +41,12 @@ models:
     # Config indicated by + and applies to all files under models/example/
     partition_demo:
       +schema: partition_demo
-      +group: acxiom_demo
+      +group: partition_demo
 
 seeds:
   t_jaffle_shop:
     +enabled: false
-    +schema: trouze
+    +schema: seeds
     +database: raw
 
 vars:

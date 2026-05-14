@@ -18,7 +18,7 @@ attributes:
     environment_id: "{{ env.DBT_CLOUD_ENVIRONMENT_ID }}"
     access_url: "{{ env.DBT_BASE_URL }}"
   git_branch: "{{ env.DBT_CLOUD_GIT_BRANCH }}"
-  github_repo: trouze/acxiom
+  github_repo: trouze/dagster-dbt
   select: "+file_orders_refined hygiene_results"
   partition_keys: ["001", "002", "003"]
   preflight: dagster_dbt_cloud.defs.partition_demo.preflight_checks.run_preflight

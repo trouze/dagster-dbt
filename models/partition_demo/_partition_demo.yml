@@ -3,7 +3,7 @@ version: 2
 sources:
   - name: partition_demo
     database: RAW
-    schema: trouze
+    schema: "{{ env_var('DBT_PARTITION_DEMO_SCHEMA', 'public') }}"
     tables:
       - name: inbound_file_orders_{{ var("partition_id") }}
         columns:
@@ -110,7 +110,7 @@ models:
           hygiene result was loaded; used as the incremental high-water mark.
 
 groups:
-  - name: acxiom_demo
+  - name: partition_demo
     owner:
       name: Tyler Rouze
       email: tyler.rouze@dbtlabs.com
