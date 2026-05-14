@@ -29,19 +29,12 @@ Customer YAML:
 import asyncio
 import importlib
 import json
-import threading
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from functools import cached_property
 from pathlib import Path
 from typing import Any, cast
 
 import dagster as dg
-from dagster._core.definitions.definitions_load_context import (
-    DefinitionsLoadContext,
-    DefinitionsLoadType,
-)
-from dagster._core.storage.defs_state.base import DefsStateStorage
-from dagster._utils.env import using_dagster_dev
 from dagster.components import ComponentLoadContext
 from dagster_dbt.asset_utils import (
     DAGSTER_DBT_CLOUD_ACCOUNT_ID_METADATA_KEY,
@@ -71,14 +64,6 @@ from dagster_dbt_cloud.resources.github import GitHubResource
 DBT_CLOUD_RUN_TIMEOUT_SECONDS = 1800
 SENSOR_DEFAULT_INTERVAL_SECONDS = 300
 
-# Module-level dedup for refresh_if_dev across sibling components that share the
-# same defs_state key. Upstream `StateBackedComponent.build_defs` calls
-# `refresh_state` per instance, so two pipelines pointing at the same workspace
-# would each trigger a dbt Cloud parse job at code-server load. We cache the
-# version produced by the first refresh, scoped to the current load-context id,
-# so later siblings reuse it.
-_refresh_cache_lock = threading.Lock()
-_refresh_cache: dict[str, tuple[int, str]] = {}
 
 def _safe_name(s: str) -> str:
     return "".join(c if c.isalnum() else "_" for c in s)
@@ -286,42 +271,14 @@ class IsolatedDbtCloudPipeline(DbtCloudComponent):
             return None
         return dg.StaticPartitionsDefinition(self.partition_keys)
 
-    def build_defs(self, context: ComponentLoadContext) -> dg.Definitions:
-        key = self.defs_state_config.key
-        load_ctx = DefinitionsLoadContext.get()
-        state_storage = DefsStateStorage.get()
-
-        if (
-            load_ctx.load_type == DefinitionsLoadType.INITIALIZATION
-            and using_dagster_dev()
-            and self.defs_state_config.refresh_if_dev
-        ):
-            with _refresh_cache_lock:
-                cached = _refresh_cache.get(key)
-                if cached is not None and cached[0] == id(load_ctx):
-                    version = cached[1]
-                else:
-                    version = asyncio.run(self.refresh_state(context.project_root))
-                    _refresh_cache[key] = (id(load_ctx), version)
-            load_ctx.add_defs_state_info(key, version)
-
-        with load_ctx.state_path(
-            self.defs_state_config, state_storage, context.project_root
-        ) as state_path:
-            state_defs = self.build_defs_from_state(context, state_path=state_path)
-
-        # Emit the refresh job and git-watch sensor regardless of whether state
-        # exists. On a fresh checkout the state file is absent until the first
-        # parse — we still need the job available so the user (or sensor) can
-        # produce that first state.
-        refresh_defs = self._build_refresh_defs(context)
-        return dg.Definitions.merge(state_defs, refresh_defs)
-
     def build_defs_from_state(
         self, context: ComponentLoadContext, state_path: Path | None
     ) -> dg.Definitions:
+        # Emit the refresh job/sensor unconditionally so a fresh checkout
+        # (state_path=None) still exposes a way to produce the first state.
+        refresh_defs = self._build_refresh_defs(context)
         if state_path is None:
-            return dg.Definitions()
+            return refresh_defs
 
         workspace_data = cast(
             "DbtCloudWorkspaceData", deserialize_value(state_path.read_text())
@@ -368,7 +325,9 @@ class IsolatedDbtCloudPipeline(DbtCloudComponent):
                 )
             )
 
-        return dg.Definitions(assets=assets, sensors=sensors)
+        return dg.Definitions.merge(
+            dg.Definitions(assets=assets, sensors=sensors), refresh_defs
+        )
 
     def _build_refresh_defs(self, context: ComponentLoadContext) -> dg.Definitions:
         """Emit the parse-job refresh job and git-watch sensor.
