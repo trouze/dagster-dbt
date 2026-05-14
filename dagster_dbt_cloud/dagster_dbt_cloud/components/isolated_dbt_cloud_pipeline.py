@@ -2,7 +2,7 @@
 
 Each generated AssetsDefinition is its own op with its own retry boundary, so the
 Dagster UI can retry or multi-select individual models. Every model materialization
-issues a separate `DbtCloudCliInvocation.run()` against the same dbt Cloud CI job.
+issues a separate `DbtCloudCliInvocation.run()` against the same dbt Cloud job.
 
 Inherits from upstream `DbtCloudComponent` so the manifest is fetched once and
 cached via the state-backed component framework. All instances pointing at the
@@ -61,7 +61,7 @@ from dagster_dbt_cloud.resources.github import GitHubResource
 
 DBT_CLOUD_RUN_TIMEOUT_SECONDS = 1800
 SENSOR_DEFAULT_INTERVAL_SECONDS = 300
-DAGSTER_MANAGED_CI_JOB_NAME = "dagster-managed-ci"
+DAGSTER_MANAGED_JOB_NAME = "dagster-managed-job"
 
 
 def _safe_name(s: str) -> str:
@@ -71,8 +71,9 @@ def _safe_name(s: str) -> str:
 class BranchAwareDbtCloudClient(DbtCloudWorkspaceClient):
     """dbt Cloud client that forwards `git_branch` on job-run triggers.
 
-    Upstream `trigger_job_run` doesn't accept `git_branch`, but CI jobs need it to
-    know which branch to check out. Subclassing avoids the global monkey-patch.
+    Upstream `trigger_job_run` doesn't accept `git_branch`, but the branch must be
+    set per-run so each materialization checks out the right commit. Subclassing
+    avoids the global monkey-patch.
     """
 
     git_branch: str | None = None
@@ -144,7 +145,7 @@ def _log_compiled_sql(
 
     Best-effort: artifact endpoints are flaky for failed runs, and we never want
     SQL logging to mask the real run error. We filter to the requested model so
-    the log doesn't include unrelated compiled artifacts when CI bundles run.
+    the log doesn't include unrelated compiled artifacts from concurrent runs.
     """
     run_id = invocation.run_handler.run_id
     client = invocation.client
@@ -173,12 +174,12 @@ def _log_compiled_sql(
         )
 
 
-def _get_or_create_ci_job_id(workspace: DbtCloudWorkspace) -> int:
-    """Return the Dagster-managed CI job id, creating it if it doesn't exist.
+def _get_or_create_job_id(workspace: DbtCloudWorkspace) -> int:
+    """Return the Dagster-managed job id, creating it if it doesn't exist.
 
-    Looks for a job named DAGSTER_MANAGED_CI_JOB_NAME with job_type='ci' in the
-    workspace's project+environment. Creates one on first use so the pipeline is
-    fully self-contained — no manual dbt platform setup required.
+    Looks for a job named DAGSTER_MANAGED_JOB_NAME in the workspace's
+    project+environment. Creates one on first use so the pipeline is fully
+    self-contained — no manual dbt platform setup required.
     """
     client = workspace.get_client()
     jobs = client.list_jobs(
@@ -187,7 +188,7 @@ def _get_or_create_ci_job_id(workspace: DbtCloudWorkspace) -> int:
     )
     existing = [
         job for job in jobs
-        if job.get("job_type") == "ci" and job.get("name") == DAGSTER_MANAGED_CI_JOB_NAME
+        if job.get("job_type") == "ci" and job.get("name") == DAGSTER_MANAGED_JOB_NAME
     ]
     if existing:
         return int(existing[0]["id"])
@@ -200,7 +201,7 @@ def _get_or_create_ci_job_id(workspace: DbtCloudWorkspace) -> int:
             "account_id": int(workspace.credentials.account_id),
             "project_id": int(workspace.project_id),
             "environment_id": int(workspace.environment_id),
-            "name": DAGSTER_MANAGED_CI_JOB_NAME,
+            "name": DAGSTER_MANAGED_JOB_NAME,
             "job_type": "ci",
             "execute_steps": ["dbt build"],
             "triggers": {
@@ -216,7 +217,7 @@ def _get_or_create_ci_job_id(workspace: DbtCloudWorkspace) -> int:
 class IsolatedDbtCloudPipeline(DbtCloudComponent):
     """Fan a dbt selection out into one AssetsDefinition per matched dbt model.
 
-    Each model materializes via a single dbt Cloud CI-job run, so models within
+    Each model materializes via a single dbt Cloud job run, so models within
     the same selection can execute concurrently and Dagster can retry / multi-
     select them individually.
     """
@@ -224,15 +225,15 @@ class IsolatedDbtCloudPipeline(DbtCloudComponent):
     git_branch: str | None = Field(
         default=None,
         description=(
-            "Branch passed to dbt Cloud on every CI-job trigger. Required for CI "
-            "jobs since their branch is set per-run, not on the job definition."
+            "Branch passed to dbt Cloud on every job trigger. The branch is set "
+            "per-run so each materialization checks out the right commit."
         ),
     )
-    ci_job_id: int | None = Field(
+    job_id: int | None = Field(
         default=None,
         description=(
-            "Optional explicit dbt Cloud CI job id. If unset, the component "
-            "looks for a job named 'dagster-managed-ci' in the workspace's "
+            "Optional explicit dbt Cloud job id. If unset, the component looks "
+            "for a job named 'dagster-managed-job' in the workspace's "
             "project+environment and creates it if not found."
         ),
     )
@@ -274,10 +275,10 @@ class IsolatedDbtCloudPipeline(DbtCloudComponent):
     )
 
     @cached_property
-    def resolved_ci_job_id(self) -> int:
-        if self.ci_job_id is not None:
-            return self.ci_job_id
-        return _get_or_create_ci_job_id(self.workspace)
+    def resolved_job_id(self) -> int:
+        if self.job_id is not None:
+            return self.job_id
+        return _get_or_create_job_id(self.workspace)
 
     @cached_property
     def partitions_def(self) -> dg.PartitionsDefinition | None:
@@ -446,7 +447,7 @@ class IsolatedDbtCloudPipeline(DbtCloudComponent):
         workspace = self.workspace
         fqn = ".".join(node["fqn"])
         op_name = node["name"]
-        ci_job_id = self.resolved_ci_job_id
+        job_id = self.resolved_job_id
         git_branch = self.git_branch
         translator = self.translator
         partitions_def = self.partitions_def
@@ -487,7 +488,7 @@ class IsolatedDbtCloudPipeline(DbtCloudComponent):
                 args += ["--vars", json.dumps({"partition_id": context.partition_key})]
 
             context.log.info(
-                f"dbt Cloud CI job {ci_job_id} :: {fqn} "
+                f"dbt Cloud job {job_id} :: {fqn} "
                 f"(partition={context.partition_key if partitions_def else 'none'}, "
                 f"branch={git_branch})"
             )

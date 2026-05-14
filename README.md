@@ -1,15 +1,15 @@
 # dagster-dbt
 
-A starter project for orchestrating dbt platform CI-job runs from Dagster.
+A starter project for orchestrating dbt platform job runs from Dagster.
 
 Each dbt model becomes a per-model Dagster asset, materialized through a single
-dbt CI job. The bundled `IsolatedDbtCloudPipeline` component handles the
+dbt platform job. The bundled `IsolatedDbtCloudPipeline` component handles the
 mapping, caches the dbt manifest as state-backed Dagster defs, and refreshes
 that cache automatically when the watched branch advances.
 
 ## What you get
 
-- Per-model assets in Dagster, materialized via a single dbt platform CI job
+- Per-model assets in Dagster, materialized via a single dbt platform job
 - Partition-aware reprocessing — pass a `partition_id` and dbt rebuilds only
   that slice
 - Python steps between dbt stages (preflight checks, mocked external API calls,
@@ -41,8 +41,8 @@ A deeper walkthrough of the component itself lives at
 
 - Python 3.10+
 - [uv](https://docs.astral.sh/uv/)
-- A dbt platform account with a CI job configured
-- A Snowflake warehouse the CI job can write to (key-pair auth in the default
+- A dbt platform account
+- A Snowflake warehouse the dbt job can write to (key-pair auth in the default
   profile)
 
 ## Quickstart
@@ -65,13 +65,15 @@ A deeper walkthrough of the component itself lives at
    | `DBT_CLOUD_ACCOUNT_ID` | dbt platform account |
    | `DBT_CLOUD_PROJECT_ID` | dbt platform project |
    | `DBT_CLOUD_ENVIRONMENT_ID` | dbt platform environment |
-   | `DBT_CLOUD_JOB_ID` | CI job the component invokes |
    | `DBT_API_KEY` | API token |
    | `DBT_BASE_URL` | e.g. `https://cloud.getdbt.com` |
    | `DBT_CLOUD_GIT_BRANCH` | branch the refresh sensor watches |
 
-   Snowflake credentials (`ACCOUNT`, `USER`, `DATABASE`, `WAREHOUSE`, `SCHEMA`,
-   `KEY_PATH`, `PASSPHRASE`) are read by `profiles.yml`.
+   The component auto-provisions the dbt platform job on first run — no job ID
+   needed. Snowflake credentials (`SNOWFLAKE_ACCOUNT`, `SNOWFLAKE_USER`,
+   `SNOWFLAKE_DATABASE`, `SNOWFLAKE_WAREHOUSE`, `SNOWFLAKE_SCHEMA`,
+   `SNOWFLAKE_KEY_PATH`, `SNOWFLAKE_PASSPHRASE`) are shared between the Dagster
+   resource and `profiles.yml`.
 
 4. Bootstrap the manifest cache:
 

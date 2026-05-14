@@ -1,6 +1,6 @@
 # dagster_dbt_cloud
 
-Dagster project that wraps dbt Cloud CI-job runs as per-model Dagster assets via
+Dagster project that wraps dbt Cloud job runs as per-model Dagster assets via
 the `IsolatedDbtCloudPipeline` component (`dagster_dbt_cloud.components`).
 
 ## Refreshing the dbt Cloud workspace cache
