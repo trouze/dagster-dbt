@@ -3,7 +3,7 @@ version: 2
 sources:
   - name: partition_demo
     database: RAW
-    schema: "{{ env_var('DBT_PARTITION_DEMO_SCHEMA', 'public') }}"
+    schema: TROUZE
     tables:
       - name: inbound_file_orders_{{ var("partition_id") }}
         columns:
