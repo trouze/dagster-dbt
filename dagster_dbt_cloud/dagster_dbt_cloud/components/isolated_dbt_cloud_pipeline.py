@@ -61,7 +61,6 @@ from dagster_dbt_cloud.resources.github import GitHubResource
 
 DBT_CLOUD_RUN_TIMEOUT_SECONDS = 1800
 SENSOR_DEFAULT_INTERVAL_SECONDS = 300
-DAGSTER_MANAGED_JOB_NAME = "dagster-managed-job"
 
 
 def _safe_name(s: str) -> str:
@@ -174,45 +173,6 @@ def _log_compiled_sql(
         )
 
 
-def _get_or_create_job_id(workspace: DbtCloudWorkspace) -> int:
-    """Return the Dagster-managed job id, creating it if it doesn't exist.
-
-    Looks for a job named DAGSTER_MANAGED_JOB_NAME in the workspace's
-    project+environment. Creates one on first use so the pipeline is fully
-    self-contained — no manual dbt platform setup required.
-    """
-    client = workspace.get_client()
-    jobs = client.list_jobs(
-        project_id=int(workspace.project_id),
-        environment_id=int(workspace.environment_id),
-    )
-    existing = [
-        job for job in jobs
-        if job.get("job_type") == "ci" and job.get("name") == DAGSTER_MANAGED_JOB_NAME
-    ]
-    if existing:
-        return int(existing[0]["id"])
-
-    response = client._make_request(  # noqa: SLF001
-        method="post",
-        endpoint="jobs/",
-        base_url=client.api_v2_url,
-        data={
-            "account_id": int(workspace.credentials.account_id),
-            "project_id": int(workspace.project_id),
-            "environment_id": int(workspace.environment_id),
-            "name": DAGSTER_MANAGED_JOB_NAME,
-            "job_type": "ci",
-            "execute_steps": ["dbt build"],
-            "triggers": {
-                "github_webhook": False,
-                "schedule": False,
-                "custom_branch_only": False,
-            },
-        },
-    )
-    return int(response.json()["data"]["id"])
-
 
 class IsolatedDbtCloudPipeline(DbtCloudComponent):
     """Fan a dbt selection out into one AssetsDefinition per matched dbt model.
@@ -227,14 +187,6 @@ class IsolatedDbtCloudPipeline(DbtCloudComponent):
         description=(
             "Branch passed to dbt Cloud on every job trigger. The branch is set "
             "per-run so each materialization checks out the right commit."
-        ),
-    )
-    job_id: int | None = Field(
-        default=None,
-        description=(
-            "Optional explicit dbt Cloud job id. If unset, the component looks "
-            "for a job named 'dagster-managed-job' in the workspace's "
-            "project+environment and creates it if not found."
         ),
     )
     partition_keys: list[str] | None = Field(
@@ -275,12 +227,6 @@ class IsolatedDbtCloudPipeline(DbtCloudComponent):
     )
 
     @cached_property
-    def resolved_job_id(self) -> int:
-        if self.job_id is not None:
-            return self.job_id
-        return _get_or_create_job_id(self.workspace)
-
-    @cached_property
     def partitions_def(self) -> dg.PartitionsDefinition | None:
         if not self.partition_keys:
             return None
@@ -300,6 +246,7 @@ class IsolatedDbtCloudPipeline(DbtCloudComponent):
         )
         manifest = validate_manifest(workspace_data.manifest)
         nodes = manifest.get("nodes", {})
+        adhoc_job_ids = list(workspace_data.adhoc_job_ids)
 
         asset_specs, check_specs = build_dbt_specs(
             manifest=manifest,
@@ -328,6 +275,7 @@ class IsolatedDbtCloudPipeline(DbtCloudComponent):
                     node=node,
                     extra_deps=upstream_dep_keys,
                     manifest=manifest,
+                    adhoc_job_ids=adhoc_job_ids,
                 )
             )
 
@@ -443,11 +391,11 @@ class IsolatedDbtCloudPipeline(DbtCloudComponent):
         node: Mapping[str, Any],
         extra_deps: Sequence[dg.AssetKey],
         manifest: Mapping[str, Any],
+        adhoc_job_ids: Sequence[int],
     ) -> dg.AssetsDefinition:
         workspace = self.workspace
         fqn = ".".join(node["fqn"])
         op_name = node["name"]
-        job_id = self.resolved_job_id
         git_branch = self.git_branch
         translator = self.translator
         partitions_def = self.partitions_def
@@ -487,6 +435,7 @@ class IsolatedDbtCloudPipeline(DbtCloudComponent):
             if partitions_def is not None:
                 args += ["--vars", json.dumps({"partition_id": context.partition_key})]
 
+            job_id = workspace._pick_available_adhoc_job_id(adhoc_job_ids)  # noqa: SLF001
             context.log.info(
                 f"dbt Cloud job {job_id} :: {fqn} "
                 f"(partition={context.partition_key if partitions_def else 'none'}, "
@@ -495,7 +444,7 @@ class IsolatedDbtCloudPipeline(DbtCloudComponent):
 
             client = _build_branch_aware_client(workspace, git_branch)
             invocation = DbtCloudCliInvocation.run(
-                job_id=ci_job_id,
+                job_id=job_id,
                 args=args,
                 client=client,
                 manifest=manifest,

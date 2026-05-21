@@ -17,6 +17,8 @@ attributes:
     project_id: "{{ env.DBT_CLOUD_PROJECT_ID }}"
     environment_id: "{{ env.DBT_CLOUD_ENVIRONMENT_ID }}"
     access_url: "{{ env.DBT_BASE_URL }}"
+    adhoc_job_pool_size: 5
+    adhoc_job_pool_mode: overflow
   git_branch: "{{ env.DBT_CLOUD_GIT_BRANCH }}"
   github_repo: trouze/dagster-dbt
   select: "+file_orders_refined hygiene_results"
@@ -28,7 +30,6 @@ attributes:
     refresh_if_dev: false
 
 ---
-
 type: dagster_dbt_cloud.components.IsolatedDbtCloudPipeline
 
 attributes:
@@ -38,6 +39,8 @@ attributes:
     project_id: "{{ env.DBT_CLOUD_PROJECT_ID }}"
     environment_id: "{{ env.DBT_CLOUD_ENVIRONMENT_ID }}"
     access_url: "{{ env.DBT_BASE_URL }}"
+    adhoc_job_pool_size: 5
+    adhoc_job_pool_mode: overflow
   git_branch: "{{ env.DBT_CLOUD_GIT_BRANCH }}"
   select: "name_address"
   partition_keys: ["001", "002", "003"]

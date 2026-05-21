@@ -6,12 +6,19 @@ dependencies = [
     "dagster",
     "dagster-pipes",
     "dagster-shared",
-    "dagster-graphql",
-    "dagster-webserver",
     "dagster-dbt",
     "httpx",
     "snowflake-connector-python",
 ]
+
+[tool.uv.sources]
+# Pinned to master commit f518212d for adhoc_job_pool_size support (not yet in any release).
+# Run `uv sync` after updating. The dagster monorepo uses epoch version 1!0+dev internally,
+# so all co-dependent packages must be sourced from the same revision.
+dagster     = { git = "https://github.com/dagster-io/dagster", rev = "f518212d6acc4ebc356fb93c1f6674bbcb544fd4", subdirectory = "python_modules/dagster" }
+dagster-pipes = { git = "https://github.com/dagster-io/dagster", rev = "f518212d6acc4ebc356fb93c1f6674bbcb544fd4", subdirectory = "python_modules/dagster-pipes" }
+dagster-shared = { git = "https://github.com/dagster-io/dagster", rev = "f518212d6acc4ebc356fb93c1f6674bbcb544fd4", subdirectory = "python_modules/libraries/dagster-shared" }
+dagster-dbt = { git = "https://github.com/dagster-io/dagster", rev = "f518212d6acc4ebc356fb93c1f6674bbcb544fd4", subdirectory = "python_modules/libraries/dagster-dbt" }
 
 [tool.dagster]
 module_name = "dagster_dbt_cloud.definitions"
